@@ -9,8 +9,8 @@
 #ln -s /path_to_mampire/mampire.sh /usr/local/bin/mampire
 # ------------------
 #INITILIAZE THESE 2 variables
-local_db_user='YOUR_LOCAL_DB_PASSWORD eg. root'
-local_db_password='YOUR_LOCAL_DB_PASSWORD'
+local_db_user='root'
+local_db_password='2801'
 
 show_instructions(){
     echo "Mampire version 1.1.2 - "
@@ -132,8 +132,8 @@ echo "U: $WPDBUSER";
 echo "P: $WPDBPASS";
     #import the new one into $database_name
     #TODO --compress and gzip
-mysqldump --add-drop-database -P 3306 -h$website_ipaddress -u$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
-mysql -u{$local_db_user} -p${local_db_password} -h'127.0.0.1' -e " \
+mysqldump --add-drop-database -P 3306 --host=$website_ipaddress --user=$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
+mysql --user=$local_db_user --password=$local_db_password --host=127.0.0.1 -e "\
 CREATE DATABASE IF NOT EXISTS ${database_name}; \
 USE ${database_name}; \
 source ${database_name}_temp_db.sql;" 2> /dev/null \
