@@ -1,14 +1,14 @@
 #!/bin/bash
-#------------------
+#-----------------------------------------------------------
 # Download a Wordpress site + db into a virtualhost in MAMP
-# George Tsarouchas
-# tsarouxas@hellenictechnologies.com
-# XMAS2019
-# IMPORTANT NOTE BEFORE USING
-# add to your BIN path with 
-#ln -s /path_to_mampire/mampire.sh /usr/local/bin/mampire
-# ------------------
-#INITILIAZE THESE 2 variables
+# GT - Xmas 2019
+# **IMPORTANT NOTE** BEFORE USING
+# export PATH=$PATH:/mnt/c/MAMP/bin/mysql/bin -- needs mysql.exe and mysqldump.exe
+# setup ssh access for ubuntu on windows and remote server
+# make sure you are allowed to access the remote mysql
+# Run as root inside Ubuntu app in order for this to work
+# ----------------------------------------------------------
+
 local_db_user='root'
 local_db_password='[INSERT_LOCAL_MYSQL_PASS_HERE]'
 
@@ -16,12 +16,12 @@ show_instructions(){
     echo "Mampire version 1.1.2 - "
     echo "-----------------------------------------------"
     echo "|                                             |"
-    echo "|               (㇏(•̀vv•́)ノ)                   |"
+    echo "|                   (\(•̀vv•́)/)                |"
     echo "|                                             |"
     echo "| Downloads all Wordpress project files       |"
     echo "| and imports remote database for local       |" 
     echo "| development in MAMP                         |"
-    echo "| Copyright (C) 2019 Hellenic Technologies    |"
+    echo "| (C) 2019 Hellenic Technologies              |"
     echo "| https://hellenictechnologies.com/           |"
     echo "|                                             |"
     echo "-----------------------------------------------"
@@ -29,10 +29,10 @@ show_instructions(){
     echo "Usage: $0 -h website_ipaddress -u website_username -s source_directory -t target_directory -d local_database_name -o exclude-uploads"
     echo ""
     echo "Example 1: Download files only without the database or the uploads folder"
-    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t /Users/george/Sites/electropop/htdocs/ -o exclude-uploads"
+    echo "mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t /Users/george/Sites/electropop/htdocs/ -o exclude-uploads"
     echo ""
-    echo "Example 2: Download all files and database in current folder"
-    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -d mylocaldbname"
+    echo "Example 2: Download all files and database in current folder (navigate (cd) into your local folder with terminal)"
+    echo "mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -d mylocaldbname"
 
     echo ""
     echo -e "\t-h [WEBSITE HOST/IP ADDRESS]"
@@ -40,7 +40,6 @@ show_instructions(){
     echo -e "\t-s [REMOTE DIRECTORY]"
     echo -e "\t-t [LOCAL DIRECTORY]"
     echo -e "\t-d [LOCAL DATABASE NAME]"
-    echo -e "\t-p [OPTIONAL SSH PORT NUMBER]"
     echo -e "\t-o [OPTIONAL PARAMETERS - exclude-uploads (COMMA SEPARATED)]"
     echo ""
     exit 1 
@@ -55,7 +54,6 @@ do
       t ) target_directory=$OPTARG ;;
       d ) database_name=$OPTARG ;;
       o ) extra_options=$OPTARG ;;
-      p ) port_number=$OPTARG ;;
       ? ) echo OPTARG; show_instructions ;;
    esac
 done
@@ -103,10 +101,6 @@ then
   exit 0
 fi
 
-if [ -z $port_number ] 
-then 
-    port_number=22;
-fi
 
 #Begin the process
 
@@ -115,9 +109,9 @@ echo "Downloading website files..."
 #check if they want the uploads folder or not
 if [ $exclude_uploads ] 
 then 
-rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+rsync  -e 'ssh -i /root/.ssh/id_rsa -q -p 2310' -arpz --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
 else 
-rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory $target_directory
+rsync  -e 'ssh -i /root/.ssh/id_rsa -q -p 2310' -arpz --progress $website_username@$website_ipaddress:$source_directory $target_directory
 fi
 
 if [ $database_name ]
