@@ -10,7 +10,7 @@
 # ------------------
 #INITILIAZE THESE 2 variables
 local_db_user='root'
-local_db_password='[INSERT_LOCAL_MYSQL_PASS_HERE]'
+local_db_password='[YOUR SQL ROOT PASSWORD]'
 
 show_instructions(){
     echo "Mampire version 1.1.2 - "
@@ -46,7 +46,7 @@ show_instructions(){
     exit 1 
 }
 
-while getopts "h:u:s:t:d:o:" opt
+while getopts "h:u:s:t:d:p:o:" opt
 do
    case "$opt" in
       h ) website_ipaddress=$OPTARG ;;
