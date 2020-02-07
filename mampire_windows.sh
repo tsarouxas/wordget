@@ -1,6 +1,6 @@
 #!/bin/bash
 #-----------------------------------------------------------
-# Download a Wordpress site + db into a virtualhost in MAMP
+# Download a Wordpress site + db into a virtu alhost in MAMP
 # GT - Xmas 2019
 # **IMPORTANT NOTE** BEFORE USING
 # export PATH=$PATH:/mnt/c/MAMP/bin/mysql/bin -- needs mysql.exe and mysqldump.exe
@@ -10,7 +10,7 @@
 # ----------------------------------------------------------
 
 local_db_user='root'
-local_db_password='[INSERT_LOCAL_MYSQL_PASS_HERE]'
+local_db_password='[YOUR LOCAL MYSQL ROOT PASSWORD]'
 
 show_instructions(){
     echo "Mampire version 1.1.2 - "
@@ -109,9 +109,9 @@ echo "Downloading website files..."
 #check if they want the uploads folder or not
 if [ $exclude_uploads ] 
 then 
-rsync  -e 'ssh -i /root/.ssh/id_rsa -q -p 2310' -arpz --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+rsync  -e 'ssh -i ~/.ssh/id_rsa -q -p 22' -arpz --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
 else 
-rsync  -e 'ssh -i /root/.ssh/id_rsa -q -p 2310' -arpz --progress $website_username@$website_ipaddress:$source_directory $target_directory
+rsync  -e 'ssh -i ~/.ssh/id_rsa -q -p 22' -arpz --progress $website_username@$website_ipaddress:$source_directory $target_directory
 fi
 
 if [ $database_name ]
