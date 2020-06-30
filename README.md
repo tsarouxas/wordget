@@ -1,5 +1,5 @@
 # Mampire v1.1.2
-Download a Wordpress site + db into a virtualhost in MAMP
+Download a Wordpress site + db into a virtualhost in MAMP or LOCALWP by Flywheel
 
 Downloads all Wordpress project files and imports remote database for local development in MAMP                    Copyright (C) 2019 Hellenic Technologies
 https://hellenictechnologies.com/           
@@ -36,4 +36,23 @@ mampire.sh -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/
 
 Example 2: Download all files and database in current folder
 mampire.sh -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -d mylocaldbname
+
+TODO:
+enable wpconfig debugging
+sed -i '' '/\/\* That.s all, stop editing! Happy blogging. \*\// i\
+// FX_SCRIPT FS_METHOD \
+define( "FS_METHOD", "direct" ); \
+\
+// FX_SCRIPT WP_DEBUG \
+define( "WP_DEBUG", true ); \
+define( "WP_DEBUG_LOG", true ); \
+\
+// FX_SCRIPT DISABLE_WP_CRON \
+define( "DISABLE_WP_CRON", true ); \
+\
+' wp-config.php
+
+
+CHANGELOG:
+- 2020-06-29 fixed mysqldump downloading of remote database
 

@@ -10,7 +10,7 @@
 # ------------------
 #INITILIAZE THESE 2 variables
 local_db_user='root'
-local_db_password='[YOUR SQL ROOT PASSWORD]'
+local_db_password='root'
 
 show_instructions(){
     echo "Mampire version 1.1.2 - "
@@ -132,8 +132,8 @@ echo "U: $WPDBUSER";
 echo "P: $WPDBPASS";
     #import the new one into $database_name
     #TODO --compress and gzip
-mysqldump --add-drop-database -P 3306 --host=$website_ipaddress --user=$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
-mysql --user=$local_db_user --password=$local_db_password --host=127.0.0.1 -e "\
+mysqldump --column-statistics=0 --add-drop-database -P 3306 --host=$website_ipaddress --user=$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
+mysql --user=$local_db_user --password=$local_db_password --host=localhost -e "\
 CREATE DATABASE IF NOT EXISTS ${database_name}; \
 USE ${database_name}; \
 source ${database_name}_temp_db.sql;" 2> /dev/null \
