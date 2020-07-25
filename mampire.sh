@@ -127,10 +127,11 @@ fi
 if [ $local_dev_env ]
 then 
     #Get the env variables that the specific site has.
-    #TODO: get the MYSQL Socket
     echo "Preparing Import";
-    echo "Mysql socket is: $MYSQL_HOME";
-    mysql_socket=$MYSQL_HOME"/mysqld.sock"
+    #Get the MYSQL Socket
+    #TODO: YOU ARE HERE 
+    mysql_socket=(${\/conf//$MYSQL_HOME})"/mysqld.sock"
+    echo "Mysql socket is: $mysql_socket";
     #get the local site domain name
     local_domain_url=$(wp option get siteurl)
     #Get the remote site domain name
@@ -145,7 +146,7 @@ then
      rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
     
     echo "Importing remote Database to LocalWP";
-    gzip -d local.sql.gz && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
+    gzip -d local.sql.gz && wp db reset --quiet --socket="$mysql_socket" && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
     #Import the remote DB to local DB
     #wp search-replace "http://oldsite.com" "https://newsite.test"
     wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
