@@ -149,16 +149,24 @@ then
     echo "Importing remote Database to LocalWP";
     gzip -d local.sql.gz && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
     #Import the remote DB to local DB
-    #wp search-replace "http://oldsite.com" "https://newsite.test"
     wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
-    #TODO: Get the remote files
-    echo "Downloading Remote files..."
-    #
-    echo "Cleaning up";
+    # Cleaning up from Database fetch
     #delete remote db download file
     ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && rm local.sql.gz && rm local.sql"
     #delete local db download file
     rm local.sql
+    #TODO: Get the remote files
+    echo "Downloading Website files..."
+    if [ $exclude_uploads ] 
+    then 
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude --exclude 'wp-config.php' 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    else 
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    fi
+    #TODO: if we are on Linux make the certfiicate is trusted
+    #mkcert $local_domain_url
+    
+   
     #ssh to server and wp export db
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
 else
