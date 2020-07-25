@@ -8,7 +8,7 @@
 # add to your BIN path with 
 #ln -s /path_to_mampire/mampire.sh /usr/local/bin/mampire
 # ------------------
-#INITILIAZE THESE 2 variableszoom.test
+#INITILIAZE THESE 2 variables
 local_db_user='root'
 local_db_password='root'
 local_dev_env='default'
@@ -83,7 +83,7 @@ do
         exclude_uploads=1
     fi
     #use LocalWP as local development environment
-    if [ $element == "localwp" ] 
+    if [ $element == "localwp" ] #TODO: needs to check SHELL env variables to detect it automatically
     then
         local_dev_env=1
     fi
@@ -94,6 +94,10 @@ echo ""
 if [ -z $target_directory ] 
 then 
     target_directory=$(pwd);
+fi
+if [ $local_dev_env ]
+then 
+    echo "LocalWP detected!";
 fi
 echo "I will now download the remote directory ${source_directory} into your local directory ${target_directory} from user ${website_username} on server ${website_ipaddress}."
 if [ $exclude_uploads ] 
@@ -120,24 +124,39 @@ then
 fi
 
 #Begin the process
-#TODO: needs to check SHELL env variables to detect it automatically
 if [ $local_dev_env ]
 then 
-    echo "LocalWP environment detected";
-    echo "Fetching Remote Database";
-    #TODO: ssh to server and wp export db local.sql
-    echo "Fetching Files";
-    #TODO: rsync the database
+    #Get the env variables that the specific site has.
+    #TODO: get the MYSQL Socket
+    echo "Preparing Import";
+    echo "Mysql socket is: $MYSQL_HOME";
+    mysql_socket=$MYSQL_HOME"/mysqld.sock"
+    #get the local site domain name
+    local_domain_url=$(wp option get siteurl)
+    #Get the remote site domain name
+    remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
+    echo "Remote URL is: $remote_domain_url";
+    echo "Local URL is: $local_domain_url";
+    echo "Fetching remote Database";
+    #ssh to server and wp export db local.sql
+    ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet && gzip -c local.sql > local.sql.gz"
+    echo "Fetching Database";
+    #rsync the database
+     rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
     
-    echo "Importing Remote Database to LocalWP";
-    #TODO: wp reset db and wp db import local.sql 
-    #TODO: use wp option get siteurl to get the local site name in order to wp search-replace "http://oldsite.com" "https://newsite.test"
+    echo "Importing remote Database to LocalWP";
+    gzip -d local.sql.gz && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
+    #Import the remote DB to local DB
+    #wp search-replace "http://oldsite.com" "https://newsite.test"
+    wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
     echo "Cleaning up";
+    #delete remote db download file
+    ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && rm local.sql.gz && rm local.sql"
+    #delete local db download file
+    #TODO: Enable this line for live version rm local.sql
     #ssh to server and wp export db
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
 else
-    echo "LocalWP environment was not detected";
-
     echo "Downloading website files..."
     #check if they want the uploads folder or not
     if [ $exclude_uploads ] 
@@ -171,6 +190,4 @@ else
     sed -i -e "s|${WPDBUSER}|$local_db_user|g" ${target_directory}/wp-config.php
     sed -i -e "s|${WPDBPASS}|${local_db_password}|g" ${target_directory}/wp-config.php
     fi
-
 fi
-
