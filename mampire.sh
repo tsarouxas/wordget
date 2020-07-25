@@ -130,8 +130,9 @@ then
     echo "Preparing Import";
     #Get the MYSQL Socket
     #TODO: YOU ARE HERE 
-    mysql_socket=(${\/conf//$MYSQL_HOME})"/mysqld.sock"
+    mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
     echo "Mysql socket is: $mysql_socket";
+    #exit 0 #DEBUG
     #get the local site domain name
     local_domain_url=$(wp option get siteurl)
     #Get the remote site domain name
