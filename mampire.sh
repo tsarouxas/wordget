@@ -123,6 +123,17 @@ then
     port_number=22;
 fi
 
+# What type of OS are we on?
+host_os="$(uname -s)"
+case "${host_os}" in
+    Linux*)     machine=Linux;;
+    Darwin*)    machine=Mac;;
+    CYGWIN*)    machine=Windows;;
+    MINGW*)     machine=Windows;;
+    *)          machine="UNKNOWN:${host_os}"
+esac
+
+
 #Begin the process
 if [ $local_dev_env ]
 then 
@@ -163,10 +174,12 @@ then
     else 
         rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
-    #TODO: if we are on Linux make the certfiicate is trusted
-    #mkcert $local_domain_url
-    
-   
+    #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
+    if [ -x "$(command -v mkcert)" ] && [ $host_os -eq "Linux" ]; then
+        mkcert $local_domain_url
+        mv $local_domain_url.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url.crt
+        mv $local_domain_url-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url.key
+    fi
     #ssh to server and wp export db
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
 else
