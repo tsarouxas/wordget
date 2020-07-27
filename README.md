@@ -53,6 +53,15 @@ define( "DISABLE_WP_CRON", true ); \
 ' wp-config.php
 
 
+#create a dev user directly into the wp database for the developer to use directly -- poses as a risk in case the database goes online. needs a tough password using 
+
+date |md5 | head -c8; echo
+
+
+wp user create tsarouxas tsarouxas@hellenictechnologies.com --role=administrator --user_pass=local
+
+
+
 CHANGELOG:
 - 2020-06-29 fixed mysqldump downloading of remote database
 
