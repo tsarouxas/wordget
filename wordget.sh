@@ -142,32 +142,36 @@ if [ $local_dev_env ]
 then 
     #Get the env variables that the specific site has.
     echo "Preparing Import";
-    #Find out the MYSQL Socket that LocalWP is using
-    mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
-    echo "Mysql socket is: $mysql_socket";
-    #exit 0 #DEBUG
-    #get the local site domain name
-    local_domain_url=$(wp option get siteurl)
-    #Get the remote site domain name
-    remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
-    echo "Remote URL is: $remote_domain_url";
-    echo "Local URL is: $local_domain_url";
-    echo "Fetching remote Database";
-    #ssh to server and wp export db local.sql
-    ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet && gzip -c local.sql > local.sql.gz"
-    echo "Fetching Database";
-    #rsync the database
-     rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
-    
-    echo "Importing remote Database to LocalWP";
-    gzip -d local.sql.gz && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
-    #Import the remote DB to local DB
-    wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
-    # Cleaning up from Database fetch
-    #delete remote db download file
-    ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && rm local.sql.gz && rm local.sql"
-    #delete local db download file
-    rm local.sql
+
+     if [ $database_name ]
+    then
+        #Find out the MYSQL Socket that LocalWP is using
+        mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
+        echo "Mysql socket is: $mysql_socket";
+        #exit 0 #DEBUG
+        #get the local site domain name
+        local_domain_url=$(wp option get siteurl)
+        #Get the remote site domain name
+        remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
+        echo "Remote URL is: $remote_domain_url";
+        echo "Local URL is: $local_domain_url";
+        echo "Fetching remote Database";
+        #ssh to server and wp export db local.sql
+        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet && gzip -c local.sql > local.sql.gz"
+        echo "Fetching Database";
+        #rsync the database
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
+        
+        echo "Importing remote Database to LocalWP";
+        gzip -d local.sql.gz && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
+        #Import the remote DB to local DB
+        wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
+        # Cleaning up from Database fetch
+        #delete remote db download file
+        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && rm local.sql.gz && rm local.sql"
+        #delete local db download file
+        rm local.sql
+    fi
     #Get the remote files
     echo "Downloading Website files..."
     if [ $exclude_uploads ] 
@@ -178,9 +182,11 @@ then
     fi
     #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
     if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ]; then
-        mkcert $local_domain_url
-        mv $local_domain_url.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url.crt
-        mv $local_domain_url-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url.key
+        local_domain_url_stripped=$(echo ${local_domain_url//https\:\/\//})
+        local_domain_url_stripped=$(echo ${local_domain_url_stripped//http\:\/\//})
+        mkcert $local_domain_url_stripped
+        mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
+        mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
     fi
     #ssh to server and wp export db
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
