@@ -128,13 +128,13 @@ then
 fi
 
 # What type of OS are we on?
-host_os="$(uname -s)"
-case "${host_os}" in
-    Linux*)     machine=Linux;;
-    Darwin*)    machine=Mac;;
-    CYGWIN*)    machine=Windows;;
-    MINGW*)     machine=Windows;;
-    *)          machine="UNKNOWN:${host_os}"
+host_uname="$(uname -s)"
+case "${host_uname}" in
+    Linux*)     host_os=Linux;;
+    Darwin*)    host_os=Mac;;
+    CYGWIN*)    host_os=Windows;;
+    MINGW*)     host_os=Windows;;
+    *)          host_os="UNKNOWN:${host_uname}"
 esac
 
 
