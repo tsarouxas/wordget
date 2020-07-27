@@ -1,0 +1,20 @@
+
+TODO:
+enable wpconfig debugging
+sed -i '' '/\/\* That.s all, stop editing! Happy blogging. \*\// i\
+// FX_SCRIPT FS_METHOD \
+define( "FS_METHOD", "direct" ); \
+\
+// FX_SCRIPT WP_DEBUG \
+define( "WP_DEBUG", true ); \
+define( "WP_DEBUG_LOG", true ); \
+\
+// FX_SCRIPT DISABLE_WP_CRON \
+define( "DISABLE_WP_CRON", true ); \
+\
+' wp-config.php
+
+#create a dev user directly into the wp database for the developer to use directly -- poses as a risk in case the database goes online. needs a tough password using 
+date |md5 | head -c8; echo
+
+wp user create tsarouxas tsarouxas@hellenictechnologies.com --role=administrator --user_pass=local
