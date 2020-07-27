@@ -90,6 +90,8 @@ done
 
 #Confirmation prompt
 echo ""
+echo "Wordget v1.2.4"
+echo ""
 if [ -z $target_directory ] 
 then 
     target_directory=$(pwd);
@@ -97,8 +99,11 @@ fi
 if [ $local_dev_env ]
 then 
     echo "LocalWP detected!";
+    echo "";
 fi
-echo "I will now download the remote directory ${source_directory} into your local directory ${target_directory} from user ${website_username} on server ${website_ipaddress}."
+echo "From: ${website_username}@${website_ipaddress}."
+echo "Remote Directory: ${source_directory}"
+echo "into Local Directory: ${target_directory}"
 if [ $exclude_uploads ] 
 then 
     echo "The uploads/ folder will not be downloaded. ";
