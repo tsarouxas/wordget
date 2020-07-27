@@ -4,7 +4,7 @@ Downloads all Wordpress website files and imports remote database for local deve
 Copyright (C) 2020 Hellenic Technologies
 https://hellenictechnologies.com/     
 tsarouxas@hellenictechnologies.com      
-version 1.2.2
+version 1.2.4
 
 INSTALLATION:
 

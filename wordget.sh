@@ -6,7 +6,7 @@
 # Created December 2019 - updated July 2020
 # IMPORTANT NOTE BEFORE USING
 # add to your BIN path with 
-#ln -s /path_to_mampire/mampire.sh /usr/local/bin/mampire
+#ln -s /path_to_wordget/wordget.sh /usr/local/bin/wordget
 # ------------------
 #INITILIAZE THESE 2 variables
 local_db_user='root'
@@ -14,7 +14,7 @@ local_db_password='root'
 local_dev_env='default'
 
 show_instructions(){
-    echo "Mampire version 1.2.4"
+    echo "Wordget version 1.2.4"
     echo "-----------------------------------------------"
     echo "|                                             |"
     echo "|               (㇏(•̀vv•́)ノ)                   |"
@@ -29,16 +29,16 @@ show_instructions(){
     echo ""
     echo "Usage: $0 -h website_ipaddress -u website_username -s source_directory -t target_directory -d local_database_name -o exclude-uploads"
     echo "Make sure that your SSH PUBLIC key is installed on the source server. "
-    echo "IMPORTANT: If the option -o localwp is going to be used, then wp-cli MUST be installed on the source server and mampire NEEDS to be run through 'Open Site Shell' inside LocalWP"
+    echo "IMPORTANT: If the option -o localwp is going to be used, then wp-cli MUST be installed on the source server and wordget NEEDS to be run through 'Open Site Shell' inside LocalWP"
     echo ""
     echo "Example 1: Download the whole project into a LocalWP site"
-    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t ~/Sites/electropop/htdocs/ -o localwp,exclude-uploads"
+    echo "./wordget -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t ~/Sites/electropop/htdocs/ -o localwp,exclude-uploads"
     echo ""
     echo "Example 2: Download files only without the database or the uploads folder"
-    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t ~/Sites/electropop/htdocs/ -o exclude-uploads"
+    echo "./wordget -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t ~/Sites/electropop/htdocs/ -o exclude-uploads"
     echo ""
     echo "Example 3: Download all files and database in current folder"
-    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -d mylocaldbname"
+    echo "./wordget -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -d mylocaldbname"
 
     echo ""
     echo -e "\t-h [WEBSITE HOST/IP ADDRESS]"
