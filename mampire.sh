@@ -3,7 +3,7 @@
 # Download a Wordpress site + db into a virtualhost in MAMP
 # George Tsarouchas
 # tsarouxas@hellenictechnologies.com
-# XMAS2019
+# Created December 2019 - updated July 2020
 # IMPORTANT NOTE BEFORE USING
 # add to your BIN path with 
 #ln -s /path_to_mampire/mampire.sh /usr/local/bin/mampire
@@ -11,9 +11,10 @@
 #INITILIAZE THESE 2 variables
 local_db_user='root'
 local_db_password='root'
+local_dev_env='default'
 
 show_instructions(){
-    echo "Mampire version 1.1.2 - "
+    echo "Mampire version 1.2.4"
     echo "-----------------------------------------------"
     echo "|                                             |"
     echo "|               (㇏(•̀vv•́)ノ)                   |"
@@ -21,17 +22,22 @@ show_instructions(){
     echo "| Downloads all Wordpress project files       |"
     echo "| and imports remote database for local       |" 
     echo "| development in MAMP                         |"
-    echo "| Copyright (C) 2019 Hellenic Technologies    |"
+    echo "| Copyright (C) 2020 Hellenic Technologies    |"
     echo "| https://hellenictechnologies.com/           |"
     echo "|                                             |"
     echo "-----------------------------------------------"
     echo ""
     echo "Usage: $0 -h website_ipaddress -u website_username -s source_directory -t target_directory -d local_database_name -o exclude-uploads"
+    echo "Make sure that your SSH PUBLIC key is installed on the source server. "
+    echo "IMPORTANT: If the option -o localwp is going to be used, then wp-cli MUST be installed on the source server and mampire NEEDS to be run through 'Open Site Shell' inside LocalWP"
     echo ""
-    echo "Example 1: Download files only without the database or the uploads folder"
-    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t /Users/george/Sites/electropop/htdocs/ -o exclude-uploads"
+    echo "Example 1: Download the whole project into a LocalWP site"
+    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t ~/Sites/electropop/htdocs/ -o localwp,exclude-uploads"
     echo ""
-    echo "Example 2: Download all files and database in current folder"
+    echo "Example 2: Download files only without the database or the uploads folder"
+    echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t ~/Sites/electropop/htdocs/ -o exclude-uploads"
+    echo ""
+    echo "Example 3: Download all files and database in current folder"
     echo "./mampire -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -d mylocaldbname"
 
     echo ""
@@ -76,6 +82,11 @@ do
     then
         exclude_uploads=1
     fi
+    #use LocalWP as local development environment
+    if [ $element == "localwp" ] #TODO: needs to check SHELL env variables to detect it automatically
+    then
+        local_dev_env=1
+    fi
 done
 
 #Confirmation prompt
@@ -83,6 +94,10 @@ echo ""
 if [ -z $target_directory ] 
 then 
     target_directory=$(pwd);
+fi
+if [ $local_dev_env ]
+then 
+    echo "LocalWP detected!";
 fi
 echo "I will now download the remote directory ${source_directory} into your local directory ${target_directory} from user ${website_username} on server ${website_ipaddress}."
 if [ $exclude_uploads ] 
@@ -109,38 +124,83 @@ then
 fi
 
 #Begin the process
-
-echo "Downloading website files..."
-
-#check if they want the uploads folder or not
-if [ $exclude_uploads ] 
+if [ $local_dev_env ]
 then 
-rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
-else 
-rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory $target_directory
-fi
+    #Get the env variables that the specific site has.
+    echo "Preparing Import";
+    #Get the MYSQL Socket
+    #TODO: YOU ARE HERE 
+    mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
+    echo "Mysql socket is: $mysql_socket";
+    #exit 0 #DEBUG
+    #get the local site domain name
+    local_domain_url=$(wp option get siteurl)
+    #Get the remote site domain name
+    remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
+    echo "Remote URL is: $remote_domain_url";
+    echo "Local URL is: $local_domain_url";
+    echo "Fetching remote Database";
+    #ssh to server and wp export db local.sql
+    ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet && gzip -c local.sql > local.sql.gz"
+    echo "Fetching Database";
+    #rsync the database
+     rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
+    
+    echo "Importing remote Database to LocalWP";
+    gzip -d local.sql.gz && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
+    #Import the remote DB to local DB
+    wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
+    # Cleaning up from Database fetch
+    #delete remote db download file
+    ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && rm local.sql.gz && rm local.sql"
+    #delete local db download file
+    rm local.sql
+    #TODO: Get the remote files
+    echo "Downloading Website files..."
+    if [ $exclude_uploads ] 
+    then 
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude --exclude 'wp-config.php' 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    else 
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    fi
+    #TODO: if we are on Linux make the certfiicate is trusted
+    #mkcert $local_domain_url
+    
+   
+    #ssh to server and wp export db
+    #TODO: have a unique id so that mutliple users can download from the same site concurrently
+else
+    echo "Downloading website files..."
+    #check if they want the uploads folder or not
+    if [ $exclude_uploads ] 
+    then 
+    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    else 
+    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    fi
 
-if [ $database_name ]
-then
-    echo "Downloading Database and Importing to local database $database_name"
-    WPDBNAME=`cat ${target_directory}/wp-config.php | grep DB_NAME | cut -d \' -f 4`
-    WPDBUSER=`cat ${target_directory}/wp-config.php | grep DB_USER | cut -d \' -f 4`
-    WPDBPASS=`cat ${target_directory}/wp-config.php | grep DB_PASSWORD | cut -d \' -f 4`
-echo "remote DB credentials"
-echo "D: $WPDBNAME";
-echo "U: $WPDBUSER";
-echo "P: $WPDBPASS";
-    #import the new one into $database_name
-    #TODO --compress and gzip
-mysqldump --column-statistics=0 --add-drop-database -P 3306 --host=$website_ipaddress --user=$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
-mysql --user=$local_db_user --password=$local_db_password --host=localhost -e "\
-CREATE DATABASE IF NOT EXISTS ${database_name}; \
-USE ${database_name}; \
-source ${database_name}_temp_db.sql;" 2> /dev/null \
-&& rm ${database_name}_temp_db.sql
+    if [ $database_name ]
+    then
+        echo "Downloading Database and Importing to local database $database_name"
+        WPDBNAME=`cat ${target_directory}/wp-config.php | grep DB_NAME | cut -d \' -f 4`
+        WPDBUSER=`cat ${target_directory}/wp-config.php | grep DB_USER | cut -d \' -f 4`
+        WPDBPASS=`cat ${target_directory}/wp-config.php | grep DB_PASSWORD | cut -d \' -f 4`
+    echo "remote DB credentials"
+    echo "D: $WPDBNAME";
+    echo "U: $WPDBUSER";
+    echo "P: $WPDBPASS";
+        #import the new one into $database_name
+        #TODO --compress and gzip
+    mysqldump --column-statistics=0 --add-drop-database -P 3306 --host=$website_ipaddress --user=$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
+    mysql --user=$local_db_user --password=$local_db_password --host=localhost -e "\
+    CREATE DATABASE IF NOT EXISTS ${database_name}; \
+    USE ${database_name}; \
+    source ${database_name}_temp_db.sql;" 2> /dev/null \
+    && rm ${database_name}_temp_db.sql
 
-#replace the wp-config password to connect to the database
-sed -i -e "s|${WPDBNAME}|${database_name}|g" ${target_directory}/wp-config.php
-sed -i -e "s|${WPDBUSER}|$local_db_user|g" ${target_directory}/wp-config.php
-sed -i -e "s|${WPDBPASS}|${local_db_password}|g" ${target_directory}/wp-config.php
+    #replace the wp-config password to connect to the database
+    sed -i -e "s|${WPDBNAME}|${database_name}|g" ${target_directory}/wp-config.php
+    sed -i -e "s|${WPDBUSER}|$local_db_user|g" ${target_directory}/wp-config.php
+    sed -i -e "s|${WPDBPASS}|${local_db_password}|g" ${target_directory}/wp-config.php
+    fi
 fi
