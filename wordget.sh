@@ -77,12 +77,12 @@ IFS=',' read -r -a array <<< "$extra_options"
 
 for cmd_option in "${array[@]}"
 do
-    if [ $cmd_option == "exclude-uploads" ] 
+    if [ "$cmd_option" == "exclude-uploads" ] 
     then
         exclude_uploads=1
     fi
     #use LocalWP as local development environment
-    if [ $cmd_option == "localwp" ] #TODO: needs to check SHELL env variables to detect it automatically
+    if [ "$cmd_option" == "localwp" ] #TODO: needs to check SHELL env variables to detect it automatically
     then
         local_dev_env="localwp"
     fi
@@ -143,14 +143,14 @@ then
     #Get the env variables that the specific site has.
     echo "Preparing Import";
 
+    #get the local site domain name
+    local_domain_url=$(wp option get siteurl)
+
      if [ $database_name ]
     then
         #Find out the MYSQL Socket that LocalWP is using
         mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
         echo "Mysql socket is: $mysql_socket";
-        #exit 0 #DEBUG
-        #get the local site domain name
-        local_domain_url=$(wp option get siteurl)
         #Get the remote site domain name
         remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
         echo "Remote URL is: $remote_domain_url";
@@ -181,16 +181,18 @@ then
         rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
     #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
-    if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ]; then
+    if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ];
+    then
         local_domain_url_stripped=$(echo ${local_domain_url//https\:\/\//})
         local_domain_url_stripped=$(echo ${local_domain_url_stripped//http\:\/\//})
-        mkcert $local_domain_url_stripped
+        mkcert $local_domain_url_stripped  2> /dev/null
         mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
         mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
     fi
     #ssh to server and wp export db
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
 else
+    #Default Local development environment
     echo "Downloading website files..."
     #check if they want the uploads folder or not
     if [ $exclude_uploads ] 

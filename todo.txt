@@ -1,6 +1,9 @@
 
 TODO:
 1) wizard mode + which saves .wgconfig file at the end of the wizard with the options saved
+2) the wizard mode and config file will give life to these 3 commands
+wordget files # downnloads and imports remote files ONLY
+wordget db # downnloads and imports remote DB ONLY
 
 2) enable wpconfig debugging
 sed -i '' '/\/\* That.s all, stop editing! Happy blogging. \*\// i\
