@@ -19,3 +19,5 @@ define( "DISABLE_WP_CRON", true ); \
 3) #create a dev user directly into the wp database for the developer to use directly -- poses as a risk in case the database goes online. needs a tough password using 
 date |md5 | head -c8; echo
 wp user create tsarouxas tsarouxas@hellenictechnologies.com --role=administrator --user_pass=local
+
+4) change the wp-config-e.php that gets generated on non-localwp wordgets

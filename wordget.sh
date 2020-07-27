@@ -137,14 +137,12 @@ case "${host_uname}" in
     *)          host_os="UNKNOWN:${host_uname}"
 esac
 
-
-#Begin the process
+#Begin the process - We know enough 
 if [ $local_dev_env ]
 then 
     #Get the env variables that the specific site has.
     echo "Preparing Import";
-    #Get the MYSQL Socket
-    #TODO: YOU ARE HERE 
+    #Find out the MYSQL Socket that LocalWP is using
     mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
     echo "Mysql socket is: $mysql_socket";
     #exit 0 #DEBUG
@@ -170,7 +168,7 @@ then
     ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && rm local.sql.gz && rm local.sql"
     #delete local db download file
     rm local.sql
-    #TODO: Get the remote files
+    #Get the remote files
     echo "Downloading Website files..."
     if [ $exclude_uploads ] 
     then 
@@ -179,7 +177,7 @@ then
         rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
     #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
-    if [ -x "$(command -v mkcert)" ] && [ $host_os -eq "Linux" ]; then
+    if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ]; then
         mkcert $local_domain_url
         mv $local_domain_url.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url.crt
         mv $local_domain_url-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url.key
