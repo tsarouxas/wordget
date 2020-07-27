@@ -75,16 +75,16 @@ fi
 # Check for extra parameters
 IFS=',' read -r -a array <<< "$extra_options"
 
-for element in "${array[@]}"
+for cmd_option in "${array[@]}"
 do
-    if [ $element == "exclude-uploads" ] 
+    if [ $cmd_option == "exclude-uploads" ] 
     then
         exclude_uploads=1
     fi
     #use LocalWP as local development environment
-    if [ $element == "localwp" ] #TODO: needs to check SHELL env variables to detect it automatically
+    if [ $cmd_option == "localwp" ] #TODO: needs to check SHELL env variables to detect it automatically
     then
-        local_dev_env=1
+        local_dev_env="localwp"
     fi
 done
 
@@ -96,7 +96,7 @@ if [ -z $target_directory ]
 then 
     target_directory=$(pwd);
 fi
-if [ $local_dev_env ]
+if [ "$local_dev_env" == "localwp" ]
 then 
     echo "LocalWP detected!";
     echo "";
