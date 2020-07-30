@@ -168,10 +168,10 @@ then
         then
            #On Windows we need the mysql port
             mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
-            wp db import local.sql --quiet --skip-optimization --port=$mysql_port
+            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
         else
             #On Linux/MacOS we need the socket
-            wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
+            wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
         fi
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
