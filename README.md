@@ -18,7 +18,7 @@ USAGE:
 wordget -h website_ipaddress -u website_username -s source_directory -t target_directory -d local_database_name -o exclude-uploads
 
 EXAMPLES: 
-1) Download the whole project into a LocalWP site
+1) Download the whole project into a LocalWP site (Requires to be run from the right-click option "Open Site Shell" inside LocalWP)
  wordget -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t ~/Sites/electropop/htdocs/ -o localwp,exclude-uploads
     
 2) Download files only without the database or the uploads folder
