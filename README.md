@@ -27,6 +27,10 @@ wordget -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -t
 3) Download all files and database in current folder
 wordget -h 88.99.242.152 -u electropop -s /home/electropop/dev.electropop.gr/ -d mylocaldbname
 
+REQUIREMENTS:
+- wp needs to be installed on the remote server in case that LocalWP is to be used locally.
+- Windows users MUST always run Wordget from a GIT BASH shell
+
 
 CHANGELOG:
 - 2020-07-26 direct integration with LocalWP - using option localwp

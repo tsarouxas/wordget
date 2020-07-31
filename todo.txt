@@ -1,11 +1,12 @@
 
 TODO:
-1) wizard mode + which saves .wgconfig file at the end of the wizard with the options saved
-2) the wizard mode and config file will give life to these 3 commands
+- check if WP is installed
+- check that all .sql files are available before attempting to import
+- wizard mode + which saves .wgconfig file at the end of the wizard with the options saved
+The wizard mode and config file will give life to these 3 commands
 wordget files # downnloads and imports remote files ONLY
 wordget db # downnloads and imports remote DB ONLY
-
-2) enable wpconfig debugging
+- enable wpconfig debugging
 sed -i '' '/\/\* That.s all, stop editing! Happy blogging. \*\// i\
 // FX_SCRIPT FS_METHOD \
 define( "FS_METHOD", "direct" ); \
@@ -19,8 +20,8 @@ define( "DISABLE_WP_CRON", true ); \
 \
 ' wp-config.php
 
-3) #create a dev user directly into the wp database for the developer to use directly -- poses as a risk in case the database goes online. needs a tough password using 
+- #create a dev user directly into the wp database for the developer to use directly -- poses as a risk in case the database goes online. needs a tough password using 
 date |md5 | head -c8; echo
 wp user create tsarouxas tsarouxas@hellenictechnologies.com --role=administrator --user_pass=local
 
-4) change the wp-config-e.php that gets generated on non-localwp wordgets
+- change the wp-config-e.php that gets generated on non-localwp wordgets
