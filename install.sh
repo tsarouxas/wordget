@@ -16,12 +16,24 @@ case "${host_uname}" in
 esac
 
 #mkcert on linux only - required for chrome to accept locally signed ssl certificates
-   if ! [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ];
-    then
-       git clone https://github.com/Homebrew/brew ~/.linuxbrew/Homebrew
-        mkdir ~/.linuxbrew/bin
-        ln -s ~/.linuxbrew/Homebrew/bin/brew ~/.linuxbrew/bin
-        eval $(~/.linuxbrew/bin/brew shellenv)
-        brew install mkcert
-    fi
-#rsync
+if ! [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ];
+then
+    git clone https://github.com/Homebrew/brew ~/.linuxbrew/Homebrew
+    mkdir ~/.linuxbrew/bin
+    ln -s ~/.linuxbrew/Homebrew/bin/brew ~/.linuxbrew/bin
+    eval $(~/.linuxbrew/bin/brew shellenv)
+    brew install mkcert
+fi
+
+#rsync on windows
+if ! [ -x "$(command -v rsync)" ] && [ "$host_os" == 'Windows' ];
+then
+    #Installer for windows
+    mkdir ~/bin
+    echo "Installing Wordget"
+    cp wordget/wordget.sh ~/bin/wordget
+    echo "Installing rsync"
+    curl -OL http://repo.msys2.org/msys/x86_64/rsync-3.1.3-1-x86_64.pkg.tar.xz
+    tar -xvf rsync-3.1.3-1-x86_64.pkg.tar.xz
+    cp usr/bin/rsync.exe ~/bin
+fi

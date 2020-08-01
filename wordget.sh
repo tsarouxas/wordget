@@ -150,7 +150,7 @@ then
     then
         #Find out the MYSQL Socket that LocalWP is using
         mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
-        echo "Mysql socket is: $mysql_socket";
+        #echo "Mysql socket is: $mysql_socket";
         #Get the remote site domain name
         remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
         echo "Remote URL is: $remote_domain_url";
@@ -161,10 +161,18 @@ then
         echo "Fetching Database";
         #rsync the database
         rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
-        
         echo "Importing remote Database to LocalWP";
-        gzip -d local.sql.gz && wp db import local.sql --quiet --skip-optimization --socket="$mysql_socket"
+        gzip -d local.sql.gz 
         #Import the remote DB to local DB
+        if [ "$host_os" == 'Windows' ];
+        then
+           #On Windows we need the mysql port
+            mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
+            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
+        else
+            #On Linux/MacOS we need the socket
+            wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
+        fi
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
         #delete remote db download file
