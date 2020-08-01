@@ -1,9 +1,7 @@
 #!/bin/bash
 echo 'Installing wordget into your local/bin directory - sudo required'
-chmod +x $PWD/wordget.sh
-sudo ln -s $PWD/wordget.sh /usr/local/bin/wordget 
 # By using ln -s (instead of copying the executable into your bin folder) way you will be able to change the steps of wordget and adjust it accordingly
-#TODO: install prerequisites
+#install prerequisites
 
 # What type of OS are we on?
 host_uname="$(uname -s)"
@@ -28,12 +26,19 @@ fi
 #rsync on windows
 if ! [ -x "$(command -v rsync)" ] && [ "$host_os" == 'Windows' ];
 then
-    #Installer for windows
-    mkdir ~/bin
-    echo "Installing Wordget"
-    cp wordget/wordget.sh ~/bin/wordget
     echo "Installing rsync"
+    mkdir ~/bin
     curl -OL http://repo.msys2.org/msys/x86_64/rsync-3.1.3-1-x86_64.pkg.tar.xz
     tar -xvf rsync-3.1.3-1-x86_64.pkg.tar.xz
     cp usr/bin/rsync.exe ~/bin
+fi
+
+echo "Installing Wordget"
+if [ "$host_os" == 'Mac' ] || [ "$host_os" == 'Linux' ];
+then
+    chmod +x $PWD/wordget.sh
+    sudo ln -s $PWD/wordget.sh /usr/local/bin/wordget 
+elif [ "$host_os" == 'Windows' ]
+    chmod +x $PWD/wordget.sh
+    cp wordget/wordget.sh ~/bin/wordget
 fi
