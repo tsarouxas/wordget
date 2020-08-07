@@ -6,6 +6,10 @@ TODO:
 The wizard mode and config file will give life to these 3 commands
 wordget files # downnloads and imports remote files ONLY
 wordget db # downnloads and imports remote DB ONLY
+
+
+- make the mkcert command through the wizard in case Trust fails
+
 - enable wpconfig debugging
 sed -i '' '/\/\* That.s all, stop editing! Happy blogging. \*\// i\
 // FX_SCRIPT FS_METHOD \
