@@ -184,9 +184,9 @@ then
     echo "Downloading Website files..."
     if [ $exclude_uploads ] 
     then 
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude --exclude 'wp-config.php' 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     else 
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
     #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
     if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ];
@@ -205,9 +205,9 @@ else
     #check if they want the uploads folder or not
     if [ $exclude_uploads ] 
     then 
-    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     else 
-    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
 
     if [ $database_name ]
