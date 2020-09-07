@@ -14,7 +14,7 @@ local_db_password='root'
 local_dev_env='default'
 
 show_instructions(){
-    echo "WordGet v1.2.4"
+    echo "WordGet v1.6.4"
     echo "--------------------------------"
     echo "(C) 2020 Hellenic Technologies"
     echo "https://hellenictechnologies.com"
@@ -86,7 +86,10 @@ do
     then
         local_dev_env="localwp"
     fi
-    if [ "$cmd_option" == "vvv" ] #TODO: needs to check SHELL env variables to detect it automatically
+
+    #Check if we are in a Vagrant VVV host
+    host_hostname="$(hostname)";
+    if [[ "$cmd_option" == "vvv" || "$host_hostname" == "vvv" ]] #TODO: needs to check SHELL env variables to detect it automatically
     then
         local_dev_env="vvv"
     fi
@@ -94,7 +97,6 @@ done
 
 #Confirmation prompt
 echo ""
-echo "Wordget v1.6.4"
 echo ""
 if [ -z $target_directory ] 
 then 
@@ -105,6 +107,7 @@ then
     echo "LocalWP detected!";
     echo "";
 fi
+
 if [ "$local_dev_env" == "vvv" ]
 then 
     echo "VVV detected!";
@@ -218,7 +221,6 @@ then
 
      if [ $database_name ]
     then
-        #Find out the MYSQL Socket that LocalWP is using
         #Get the remote site domain name
         remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
         echo "Remote URL is: $remote_domain_url";
@@ -229,18 +231,10 @@ then
         echo "Fetching Database";
         #rsync the database
         rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
-        echo "Importing remote Database to LocalWP";
+        echo "Importing remote Database to vvv";
         gzip -d local.sql.gz 
         #Import the remote DB to local DB
-        if [ "$host_os" == 'Windows' ];
-        then
-           #On Windows we need the mysql port
-            mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
-            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
-        else
-            #On Linux/MacOS we need the socket
-            wp db import local.sql --quiet --force --skip-optimization
-        fi
+        wp db import local.sql --quiet --force --skip-optimization
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
         #delete remote db download file
@@ -265,8 +259,6 @@ then
         mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
         mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
     fi
-    #ssh to server and wp export db
-    #TODO: have a unique id so that mutliple users can download from the same site concurrently
 else
     #Default Local development environment
     echo "Downloading website files..."
