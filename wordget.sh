@@ -86,11 +86,15 @@ do
     then
         local_dev_env="localwp"
     fi
+    if [ "$cmd_option" == "vvv" ] #TODO: needs to check SHELL env variables to detect it automatically
+    then
+        local_dev_env="vvv"
+    fi
 done
 
 #Confirmation prompt
 echo ""
-echo "Wordget v1.2.4"
+echo "Wordget v1.6.4"
 echo ""
 if [ -z $target_directory ] 
 then 
@@ -99,6 +103,11 @@ fi
 if [ "$local_dev_env" == "localwp" ]
 then 
     echo "LocalWP detected!";
+    echo "";
+fi
+if [ "$local_dev_env" == "vvv" ]
+then 
+    echo "VVV detected!";
     echo "";
 fi
 echo "From: ${website_username}@${website_ipaddress}."
@@ -138,10 +147,10 @@ case "${host_uname}" in
 esac
 
 #Begin the process - We know enough 
-if [ $local_dev_env ]
+if [ "$local_dev_env" == "localwp" ]
 then 
     #Get the env variables that the specific site has.
-    echo "Preparing Import";
+    echo "Preparing Import for LocalWP";
 
     #get the local site domain name
     local_domain_url=$(wp option get siteurl)
@@ -172,6 +181,65 @@ then
         else
             #On Linux/MacOS we need the socket
             wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
+        fi
+        wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
+        # Cleaning up from Database fetch
+        #delete remote db download file
+        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && rm local.sql.gz && rm local.sql"
+        #delete local db download file
+        rm local.sql
+    fi
+    #Get the remote files
+    echo "Downloading Website files..."
+    if [ $exclude_uploads ] 
+    then 
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    else 
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    fi
+    #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
+    if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ];
+    then
+        local_domain_url_stripped=$(echo ${local_domain_url//https\:\/\//})
+        local_domain_url_stripped=$(echo ${local_domain_url_stripped//http\:\/\//})
+        mkcert $local_domain_url_stripped  2> /dev/null
+        mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
+        mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
+    fi
+    #ssh to server and wp export db
+    #TODO: have a unique id so that mutliple users can download from the same site concurrently
+elif [ "$local_dev_env" == "vvv" ]
+then 
+    #Get the env variables that the specific site has.
+    echo "Preparing Import for VVV";
+
+    #get the local site domain name
+    local_domain_url=$(wp option get siteurl)
+
+     if [ $database_name ]
+    then
+        #Find out the MYSQL Socket that LocalWP is using
+        #Get the remote site domain name
+        remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
+        echo "Remote URL is: $remote_domain_url";
+        echo "Local URL is: $local_domain_url";
+        echo "Fetching remote Database";
+        #ssh to server and wp export db local.sql
+        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet && gzip -c local.sql > local.sql.gz"
+        echo "Fetching Database";
+        #rsync the database
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
+        echo "Importing remote Database to LocalWP";
+        gzip -d local.sql.gz 
+        #Import the remote DB to local DB
+        if [ "$host_os" == 'Windows' ];
+        then
+           #On Windows we need the mysql port
+            mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
+            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
+        else
+            #On Linux/MacOS we need the socket
+            wp db import local.sql --quiet --force --skip-optimization
         fi
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
