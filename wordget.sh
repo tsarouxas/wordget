@@ -227,7 +227,7 @@ then
         echo "Local URL is: $local_domain_url";
         echo "Fetching remote Database";
         #ssh to server and wp export db local.sql
-        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet && gzip -c local.sql > local.sql.gz"
+        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet --no-tablespaces && gzip -c local.sql > local.sql.gz"
         echo "Fetching Database";
         #rsync the database
         rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
@@ -282,7 +282,7 @@ else
     echo "P: $WPDBPASS";
         #import the new one into $database_name
         #TODO --compress and gzip
-    mysqldump --column-statistics=0 --add-drop-database -P 3306 --host=$website_ipaddress --user=$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
+    mysqldump --column-statistics=0 --no-tablespaces --add-drop-database -P 3306 --host=$website_ipaddress --user=$WPDBUSER --password=$WPDBPASS $WPDBNAME 2> /dev/null > ${database_name}_temp_db.sql && \
     mysql --user=$local_db_user --password=$local_db_password --host=localhost -e "\
     CREATE DATABASE IF NOT EXISTS ${database_name}; \
     USE ${database_name}; \
