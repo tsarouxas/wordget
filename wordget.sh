@@ -157,7 +157,7 @@ then
         echo "Local URL is: $local_domain_url";
         echo "Fetching remote Database";
         #ssh to server and wp export db local.sql
-        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet && gzip -c local.sql > local.sql.gz"
+        ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet --no-tablespaces && gzip -c local.sql > local.sql.gz"
         echo "Fetching Database";
         #rsync the database
         rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
