@@ -12,7 +12,7 @@
 local_db_user='root'
 local_db_password='root'
 local_dev_env='default'
-
+rsync_options='-arpz'
 show_instructions(){
     echo "WordGet v1.6.4"
     echo "--------------------------------"
@@ -87,6 +87,14 @@ do
         local_dev_env="localwp"
     fi
 
+    #use LocalWP as LocalMode development environment
+    if [ "$cmd_option" == "localmode" ] #TODO: needs to check SHELL env variables to detect it automatically
+    then
+        local_dev_env="localmode"
+        #be quiet when in localmode
+        rsync_options="-qarpz"
+    fi
+
     #Check if we are in a Vagrant VVV host
     host_hostname="$(hostname)";
     if [[ "$cmd_option" == "vvv" || "$host_hostname" == "vvv" ]] #TODO: needs to check SHELL env variables to detect it automatically
@@ -113,27 +121,30 @@ then
     echo "VVV detected!";
     echo "";
 fi
-echo "From: ${website_username}@${website_ipaddress}."
-echo "Remote Directory: ${source_directory}"
-echo "into Local Directory: ${target_directory}"
-if [ $exclude_uploads ] 
+#localmode runs without a prompt
+if [ "$local_dev_env" != "localmode" ]
 then 
-    echo "The uploads/ folder will not be downloaded. ";
-fi
-if [ $database_name ] 
-then 
-    echo "The remote database will be downloaded and imported into your local database: $database_name.";
-else
-    echo "The remote database will not be downloaded.";
-fi
+    echo "From: ${website_username}@${website_ipaddress}."
+    echo "Remote Directory: ${source_directory}"
+    echo "into Local Directory: ${target_directory}"
+    if [ $exclude_uploads ] 
+    then 
+        echo "The uploads/ folder will not be downloaded. ";
+    fi
+    if [ $database_name ] 
+    then 
+        echo "The remote database will be downloaded and imported into your local database: $database_name.";
+    else
+        echo "The remote database will not be downloaded.";
+    fi
 
-echo ""
-read -p "Are you sure you want to continue? <y/N> " prompt
-if [[ $prompt != "y" && $prompt != "Y" && $prompt != "yes" && $prompt != "Yes" ]]
-then
-  exit 0
+    echo ""
+    read -p "Are you sure you want to continue? <y/N> " prompt
+    if [[ $prompt != "y" && $prompt != "Y" && $prompt != "yes" && $prompt != "Yes" ]]
+    then
+    exit 0
+    fi
 fi
-
 if [ -z $port_number ] 
 then 
     port_number=22;
@@ -172,7 +183,7 @@ then
         ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet --no-tablespaces=1 && gzip -c local.sql > local.sql.gz"
         echo "Fetching Database";
         #rsync the database
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
         echo "Importing remote Database to LocalWP";
         gzip -d local.sql.gz 
         #Import the remote DB to local DB
@@ -196,9 +207,9 @@ then
     echo "Downloading Website files..."
     if [ $exclude_uploads ] 
     then 
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     else 
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
     #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
     if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ];
@@ -211,15 +222,15 @@ then
     fi
     #ssh to server and wp export db
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
-elif [ "$local_dev_env" == "vvv" ]
+elif [[ "$local_dev_env" == "vvv" || "$local_dev_env" == "localmode" ]]
 then 
     #Get the env variables that the specific site has.
-    echo "Preparing Import for VVV";
+    echo "Preparing Import for $local_dev_env";
 
     #get the local site domain name
     local_domain_url=$(wp option get siteurl)
 
-     if [ $database_name ]
+    if [ $database_name ]
     then
         #Get the remote site domain name
         remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
@@ -230,8 +241,8 @@ then
         ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp db export local.sql --quiet --no-tablespaces=1 && gzip -c local.sql > local.sql.gz"
         echo "Fetching Database";
         #rsync the database
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
-        echo "Importing remote Database to vvv";
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --progress $website_username@$website_ipaddress:$source_directory/local.sql.gz $target_directory/local.sql.gz
+        echo "Importing remote Database to $local_dev_env";
         gzip -d local.sql.gz 
         #Import the remote DB to local DB
         wp db import local.sql --quiet --force --skip-optimization
@@ -246,9 +257,9 @@ then
     echo "Downloading Website files..."
     if [ $exclude_uploads ] 
     then 
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     else 
-        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+        rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --exclude 'wp-config.php' --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
     #if we are on Linux make the certificate is trusted and if the command mkcert exists in the PATH
     if [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ];
@@ -265,9 +276,9 @@ else
     #check if they want the uploads folder or not
     if [ $exclude_uploads ] 
     then 
-    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --exclude 'wp-content/cache/*' --exclude 'wp-content/uploads/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     else 
-    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" -arpz --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
+    rsync  -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" $rsync_options --exclude 'wp-content/cache/*' --progress $website_username@$website_ipaddress:$source_directory $target_directory
     fi
 
     if [ $database_name ]
