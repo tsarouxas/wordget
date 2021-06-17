@@ -191,10 +191,10 @@ then
         then
            #On Windows we need the mysql port
             mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
-            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
+            wp db clean --yes && wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
         else
             #On Linux/MacOS we need the socket
-            wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
+            wp db clean --yes --socket="$mysql_socket" && wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
         fi
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
@@ -220,7 +220,18 @@ then
         mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
         mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
     fi
-    #ssh to server and wp export db
+    #finalizations
+    #Import the remote DB to local DB
+        if [ "$host_os" == 'Windows' ];
+        then
+           #On Windows we need the mysql port
+            wp cache flush && wp rewrite flush && wp transient delete --all && wp db optimize --port=$mysql_port
+            wp db clean --yes --port=$mysql_port && wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
+        else
+            #On Linux/MacOS we need the socket
+            wp db clean --yes --socket="$mysql_socket" && wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
+        fi
+   
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
 elif [[ "$local_dev_env" == "vvv" || "$local_dev_env" == "localmode" ]]
 then 
@@ -245,7 +256,7 @@ then
         echo "Importing remote Database to $local_dev_env";
         gzip -d local.sql.gz 
         #Import the remote DB to local DB
-        wp db import local.sql --quiet --force --skip-optimization
+        wp db clean --yes && wp db import local.sql --quiet --force --skip-optimization
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
         #delete remote db download file
@@ -270,6 +281,7 @@ then
         mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
         mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
     fi
+    wp cache flush && wp rewrite flush && wp transient delete --all && wp db optimize
 else
     #Default Local development environment
     echo "Downloading website files..."
