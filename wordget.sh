@@ -14,9 +14,9 @@ local_db_password='root'
 local_dev_env='default'
 rsync_options='-arpz'
 show_instructions(){
-    echo "WordGet v1.6.4"
+    echo "WordGet v1.6.5"
     echo "--------------------------------"
-    echo "(C) 2020 Hellenic Technologies"
+    echo "(C) 2020-2021 Hellenic Technologies"
     echo "https://hellenictechnologies.com"
     echo ""
     echo "Downloads all Wordpress website files and database and imports them into your local development enviroment"
@@ -191,10 +191,10 @@ then
         then
            #On Windows we need the mysql port
             mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
-            wp db clean --yes && wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
+            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
         else
             #On Linux/MacOS we need the socket
-            wp db clean --yes --socket="$mysql_socket" && wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
+            wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
         fi
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
@@ -226,10 +226,10 @@ then
         then
            #On Windows we need the mysql port
             wp cache flush && wp rewrite flush && wp transient delete --all && wp db optimize --port=$mysql_port
-            wp db clean --yes --port=$mysql_port && wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
+            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
         else
             #On Linux/MacOS we need the socket
-            wp db clean --yes --socket="$mysql_socket" && wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
+            wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
         fi
    
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
@@ -256,7 +256,7 @@ then
         echo "Importing remote Database to $local_dev_env";
         gzip -d local.sql.gz 
         #Import the remote DB to local DB
-        wp db clean --yes && wp db import local.sql --quiet --force --skip-optimization
+        wp db import local.sql --quiet --force --skip-optimization
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
         #delete remote db download file
