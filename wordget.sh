@@ -14,7 +14,7 @@ local_db_password='root'
 local_dev_env='default'
 rsync_options='-arpz'
 show_instructions(){
-    echo "WordGet v1.6.5"
+    echo "WordGet v1.6.6"
     echo "--------------------------------"
     echo "(C) 2020-2021 Hellenic Technologies"
     echo "https://hellenictechnologies.com"
