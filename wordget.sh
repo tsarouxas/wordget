@@ -9,8 +9,8 @@
 #ln -s /path_to_wordget/wordget.sh /usr/local/bin/wordget
 # ------------------
 #INITILIAZE THESE 2 variables
-local_db_user='root'
-local_db_password='root'
+local_db_user='wp'
+local_db_password='wp'
 local_dev_env='default'
 rsync_options='-arpz'
 show_instructions(){
