@@ -12,7 +12,7 @@ INSTALLATION (Linux & macOS):
 curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh | bash
 ```
 
-Installs wordget into /usr/local/bin (asks for sudo if needed), or ~/.local/bin if sudo isn't available.
+Installs wordget into ~/.local/bin for the current user (no sudo). If that folder isn't in your PATH, the installer prints the line to add to ~/.zshrc or ~/.bashrc.
 Run the same command again to upgrade.
 
 Options (environment variables):

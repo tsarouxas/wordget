@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh | bash
 #
 # Environment overrides:
-#   WORDGET_INSTALL_DIR  target directory (default: /usr/local/bin, falls back to ~/.local/bin)
+#   WORDGET_INSTALL_DIR  target directory (default: ~/.local/bin)
 #   WORDGET_REF          git branch/tag to install from (default: master)
 #
 # Running it again upgrades to the latest version.
@@ -37,21 +37,10 @@ main() {
         die "curl or wget is required."
     fi
 
-    # Pick install dir: explicit override > /usr/local/bin (direct or sudo) > ~/.local/bin
-    local dir sudo=""
-    if [ -n "${WORDGET_INSTALL_DIR:-}" ]; then
-        dir="$WORDGET_INSTALL_DIR"
-        mkdir -p "$dir" 2>/dev/null || true
-        [ -w "$dir" ] || sudo="sudo"
-    elif [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then
-        dir="/usr/local/bin"
-    elif command -v sudo >/dev/null 2>&1 && { sudo -n true 2>/dev/null || (: </dev/tty) 2>/dev/null; }; then
-        dir="/usr/local/bin"
-        sudo="sudo"
-    else
-        dir="$HOME/.local/bin"
-        mkdir -p "$dir"
-    fi
+    # Current user only, no sudo.
+    local dir="${WORDGET_INSTALL_DIR:-$HOME/.local/bin}"
+    mkdir -p "$dir" || die "Could not create ${dir}"
+    [ -w "$dir" ] || die "${dir} is not writable by $(id -un)"
 
     # Download to a temp file and sanity-check before touching the target.
     # Global (not local) so the EXIT trap can still see it after main returns.
@@ -66,24 +55,9 @@ main() {
     chmod 755 "$tmp"
 
     local target="${dir}/${name}"
-    if [ -n "$sudo" ]; then
-        say "Installing to ${target} (sudo required)"
-        # sudo reads the password from the terminal even when this script is piped.
-        # Replace a legacy symlink (old installer) rather than writing through it.
-        if ! { $sudo mkdir -p "$dir" && $sudo rm -f "$target" && $sudo install -m 755 "$tmp" "$target"; }; then
-            [ -z "${WORDGET_INSTALL_DIR:-}" ] || die "Could not install to ${dir}"
-            warn "sudo failed; installing for the current user instead"
-            dir="$HOME/.local/bin"
-            target="${dir}/${name}"
-            mkdir -p "$dir"
-            rm -f "$target"
-            install -m 755 "$tmp" "$target"
-        fi
-    else
-        say "Installing to ${target}"
-        rm -f "$target"
-        install -m 755 "$tmp" "$target"
-    fi
+    say "Installing to ${target}"
+    rm -f "$target"
+    install -m 755 "$tmp" "$target"
 
     local version
     version="$(grep -m1 -o 'WordGet v[0-9.]*' "$target" || true)"
@@ -97,6 +71,13 @@ main() {
             printf '    export PATH="%s:$PATH"\n' "$dir" >&2
             ;;
     esac
+
+    local found
+    found="$(command -v "$name" 2>/dev/null || true)"
+    if [ -n "$found" ] && [ "$found" != "$target" ]; then
+        warn "Another wordget at ${found} comes first in your PATH and will be used instead."
+        warn "Remove it (e.g. rm ${found}) or put ${dir} earlier in PATH."
+    fi
 
     # Runtime dependencies (informational only)
     local missing="" bin
