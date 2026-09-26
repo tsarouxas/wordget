@@ -39,6 +39,18 @@ curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh
 
 USAGE: 
 
+Interactive setup - cd into your new (target) project folder and run wordget with no parameters:
+
+```bash
+cd ~/Sites/mysite/htdocs
+wordget
+```
+
+It asks for the server, SSH user, port (default 22), remote and local directories, local environment (plain / LocalWP / VVV), database and uploads, then prints the equivalent one-line command so you can skip the questions next time.
+A trailing / is added to both directories automatically (~/public_html becomes ~/public_html/), so the folder's contents are copied, not the folder itself.
+
+Or pass everything as parameters:
+
 wordget -h website_ipaddress -u website_username -s source_directory -t target_directory -d local_database_name -o exclude-uploads
 
 EXAMPLES: 

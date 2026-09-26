@@ -22,6 +22,7 @@ show_instructions(){
     echo "Downloads all Wordpress website files and database and imports them into your local development enviroment"
     echo ""
     echo "USAGE:"
+    echo "wordget                (no parameters: interactive setup)"
     echo "wordget -h website_ipaddress -u website_username -s source_directory -t target_directory -d local_database_name -o exclude-uploads"
     echo ""
     echo "REQUIREMENTS:"
@@ -51,6 +52,128 @@ show_instructions(){
     exit 1 
 }
 
+# ------------------
+# Interactive setup - runs when wordget is started with no parameters
+# ------------------
+# ask VAR "Question" "default" [required]
+ask(){
+    local __var=$1 __q=$2 __def=$3 __req=$4 __ans
+    while :; do
+        if [ -n "$__def" ]; then
+            printf '\033[1;36m?\033[0m \033[1m%s\033[0m \033[2m(%s)\033[0m: ' "$__q" "$__def"
+        else
+            printf '\033[1;36m?\033[0m \033[1m%s\033[0m: ' "$__q"
+        fi
+        read -e -r __ans < /dev/tty || { echo ""; exit 1; }
+        __ans="${__ans:-$__def}"
+        if [ -n "$__ans" ] || [ -z "$__req" ]; then break; fi
+        printf '  \033[1;31mThis is required.\033[0m\n'
+    done
+    printf -v "$__var" '%s' "$__ans"
+}
+# ask_yn VAR "Question" y|n   -> VAR is 1 for yes, empty for no
+ask_yn(){
+    local __var=$1 __q=$2 __def=$3 __hint __ans
+    if [ "$__def" == "y" ]; then __hint="Y/n"; else __hint="y/N"; fi
+    while :; do
+        printf '\033[1;36m?\033[0m \033[1m%s\033[0m \033[2m(%s)\033[0m: ' "$__q" "$__hint"
+        read -r __ans < /dev/tty || { echo ""; exit 1; }
+        __ans="${__ans:-$__def}"
+        case "$__ans" in
+            [yY]|[yY][eE][sS]) printf -v "$__var" '%s' 1; return ;;
+            [nN]|[nN][oO])     printf -v "$__var" '%s' ""; return ;;
+        esac
+    done
+}
+run_wizard(){
+    local bold='\033[1m' yellow='\033[1;33m' dim='\033[2m' reset='\033[0m' answer
+    echo ""
+    printf "${yellow}==============================================================${reset}\n"
+    printf "${yellow}  WordGet - interactive setup${reset}\n"
+    printf "${yellow}==============================================================${reset}\n"
+    printf "${yellow}  RUN THIS FROM INSIDE YOUR NEW (TARGET) PROJECT FOLDER${reset}\n"
+    printf "${yellow}  The site will be pulled INTO:${reset}\n"
+    printf "${bold}      %s${reset}\n" "$PWD"
+    printf "${yellow}  WordGet is pull-only: the source site is never modified.${reset}\n"
+    printf "${yellow}==============================================================${reset}\n"
+    echo ""
+    ask_yn answer "Is this the right project folder?" n
+    if [ -z "$answer" ]; then
+        echo ""
+        echo "cd into your target project folder and run wordget again."
+        exit 0
+    fi
+
+    echo ""
+    printf "${dim}Source - the site to copy FROM${reset}\n"
+    ask website_ipaddress "Server host or IP address" "" required
+    ask website_username  "SSH username" "" required
+    while :; do
+        ask port_number "SSH port" "22"
+        case "$port_number" in ''|*[!0-9]*) printf '  \033[1;31mPort must be a number.\033[0m\n' ;; *) break ;; esac
+    done
+    ask source_directory "Remote WordPress directory (e.g. /home/user/public_html)" "" required
+
+    echo ""
+    printf "${dim}Target - this machine${reset}\n"
+    ask target_directory "Local directory" "$PWD"
+    #expand a leading ~ typed by the user
+    target_directory="${target_directory/#\~/$HOME}"
+
+    #Local development environment - preselect what we can detect
+    local env_default=1
+    if [ -n "$MYSQL_HOME" ] && [[ "$MYSQL_HOME" == *Local* ]]; then env_default=2; fi
+    if [ "$(hostname)" == "vvv" ]; then env_default=3; fi
+    echo ""
+    echo "  1) Plain - MAMP / XAMPP / Valet (local MySQL user: $local_db_user)"
+    echo "  2) LocalWP  (run from 'Open Site Shell')"
+    echo "  3) VVV"
+    local env_choice
+    while :; do
+        ask env_choice "Local environment" "$env_default"
+        case "$env_choice" in 1|2|3) break ;; esac
+    done
+    local env_option=""
+    case "$env_choice" in 2) env_option="localwp" ;; 3) env_option="vvv" ;; esac
+
+    echo ""
+    local want_db
+    if [ -z "$env_option" ]; then
+        ask_yn want_db "Download and import the database?" n
+        if [ -n "$want_db" ]; then
+            local db_default
+            db_default=$(basename "$target_directory" | tr -c 'A-Za-z0-9_\n' '_')
+            ask database_name "Local database name" "$db_default"
+        fi
+    else
+        ask_yn want_db "Download and import the database into this site?" y
+        #localwp/vvv import into the site's own database - the name is only a switch
+        if [ -n "$want_db" ]; then database_name="local"; fi
+    fi
+
+    local skip_uploads
+    ask_yn skip_uploads "Skip the wp-content/uploads folder?" n
+
+    extra_options="$env_option"
+    if [ -n "$skip_uploads" ]; then extra_options="${extra_options:+$extra_options,}exclude-uploads"; fi
+
+    #Show the equivalent one-liner so it can be re-run without the wizard
+    local cmd="wordget -h $website_ipaddress -u $website_username -s $(add_slash "$source_directory") -t $(add_slash "$target_directory")"
+    [ "$port_number" != "22" ] && cmd="$cmd -p $port_number"
+    [ -n "$database_name" ] && cmd="$cmd -d $database_name"
+    [ -n "$extra_options" ] && cmd="$cmd -o $extra_options"
+    echo ""
+    printf "${dim}Next time you can skip the questions with:${reset}\n"
+    printf "  %s\n" "$cmd"
+}
+# add_slash DIR -> DIR with exactly one trailing /  (rsync copies the folder CONTENTS only with a trailing /)
+add_slash(){
+    case "$1" in
+        */) printf '%s' "$1" ;;
+        *)  printf '%s/' "$1" ;;
+    esac
+}
+
 while getopts "h:u:s:t:d:p:o:" opt
 do
    case "$opt" in
@@ -64,6 +187,12 @@ do
       ? ) echo OPTARG; show_instructions ;;
    esac
 done
+
+#No parameters: interactive setup (only when a terminal is attached)
+if [ $# -eq 0 ]
+then
+    if (: </dev/tty) 2>/dev/null; then run_wizard; else show_instructions; fi
+fi
 
 #Check if all parameters are given by user
 if [ -z $website_ipaddress ] || [ -z $website_username ] || [ -z $source_directory ]
@@ -110,6 +239,9 @@ if [ -z $target_directory ]
 then 
     target_directory=$(pwd);
 fi
+#Always sync directory CONTENTS: ~/public_html -> ~/public_html/
+source_directory=$(add_slash "$source_directory")
+target_directory=$(add_slash "$target_directory")
 if [ "$local_dev_env" == "localwp" ]
 then 
     echo "LocalWP detected!";
