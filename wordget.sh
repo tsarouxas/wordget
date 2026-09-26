@@ -169,11 +169,18 @@ then
     #get the local site domain name
     local_domain_url=$(wp option get siteurl)
 
+    #How wp db commands reach LocalWP's MySQL: port on Windows, socket on Linux/macOS
+    if [ "$host_os" == 'Windows' ];
+    then
+        mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
+        wp_db_conn="--port=$mysql_port"
+    else
+        mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
+        wp_db_conn="--socket=$mysql_socket"
+    fi
+
      if [ $database_name ]
     then
-        #Find out the MYSQL Socket that LocalWP is using
-        mysql_socket=$(echo ${MYSQL_HOME//conf\//})"/mysqld.sock"
-        #echo "Mysql socket is: $mysql_socket";
         #Get the remote site domain name
         remote_domain_url=$(ssh $website_username@$website_ipaddress -p $port_number "cd $source_directory && wp option get siteurl")
         echo "Remote URL is: $remote_domain_url";
@@ -187,15 +194,7 @@ then
         echo "Importing remote Database to LocalWP";
         gzip -d local.sql.gz 
         #Import the remote DB to local DB
-        if [ "$host_os" == 'Windows' ];
-        then
-           #On Windows we need the mysql port
-            mysql_port=$(grep port $MYSQL_HOME/my.cnf | tail -c6)
-            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
-        else
-            #On Linux/MacOS we need the socket
-            wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
-        fi
+        wp db import local.sql --quiet --force --skip-optimization "$wp_db_conn"
         wp search-replace "$remote_domain_url" "$local_domain_url" --quiet
         # Cleaning up from Database fetch
         #delete remote db download file
@@ -220,18 +219,9 @@ then
         mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
         mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
     fi
-    #finalizations
-    #Import the remote DB to local DB
-        if [ "$host_os" == 'Windows' ];
-        then
-           #On Windows we need the mysql port
-            wp cache flush && wp rewrite flush && wp transient delete --all && wp db optimize --port=$mysql_port
-            wp db import local.sql --quiet --force --skip-optimization --port=$mysql_port
-        else
-            #On Linux/MacOS we need the socket
-            wp db import local.sql --quiet --force --skip-optimization --socket="$mysql_socket"
-        fi
-   
+    #finalizations - tidy up the local site after download
+    wp cache flush && wp rewrite flush && wp transient delete --all && wp db optimize "$wp_db_conn"
+
     #TODO: have a unique id so that mutliple users can download from the same site concurrently
 elif [[ "$local_dev_env" == "vvv" || "$local_dev_env" == "localmode" ]]
 then 
