@@ -6,9 +6,12 @@
 # Created December 2019
 # Install: curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh | bash
 # ------------------
-#Local MySQL credentials used for plain (MAMP/XAMPP/Valet) imports
-local_db_user='wp'
-local_db_password='wp'
+#Local MySQL login for plain (MAMP/XAMPP/Homebrew) imports - found or asked for at runtime,
+#and optionally saved here so you are only asked once
+local_db_user=''
+local_db_password=''
+local_db_host='localhost'
+wordget_config="${XDG_CONFIG_HOME:-$HOME/.config}/wordget/config"
 rsync_options='-arpz'
 quiet=''
 show_instructions(){
@@ -93,7 +96,7 @@ local_env_label(){
     case "$local_env" in
         localwp) echo "LocalWP site (${local_domain_url:-url unknown})" ;;
         wpcli)   echo "existing WordPress site, local wp-cli (${local_domain_url:-url unknown})" ;;
-        plain)   echo "plain MySQL - MAMP / XAMPP (user: $local_db_user)" ;;
+        plain)   echo "plain MySQL - MAMP / XAMPP / Homebrew" ;;
     esac
 }
 
@@ -284,6 +287,61 @@ EOF
 }
 
 # ------------------
+# Local MySQL login (plain mode)
+# ------------------
+# lmysql ARGS... -> mysql client with the local login; host may be host, host:port or host:/socket (like DB_HOST)
+lmysql(){
+    local conn=(--user="$local_db_user" --host="${local_db_host%%:*}")
+    case "$local_db_host" in
+        *:/*) conn+=(--socket="${local_db_host#*:}") ;;
+        *:*)  conn+=(--protocol=TCP --port="${local_db_host#*:}") ;;
+    esac
+    #password via the environment: not visible in ps, no "insecure password" warning
+    MYSQL_PWD="$local_db_password" mysql "${conn[@]}" "$@"
+}
+try_local_login(){
+    local_db_user=$1; local_db_password=$2; local_db_host=$3
+    lmysql -e 'SELECT 1' </dev/null >/dev/null 2>&1
+}
+find_local_login(){
+    #1) saved login
+    if [ -f "$wordget_config" ]; then
+        local saved_user saved_password saved_host
+        saved_user=$(. "$wordget_config"; printf '%s' "$local_db_user")
+        saved_password=$(. "$wordget_config"; printf '%s' "$local_db_password")
+        saved_host=$(. "$wordget_config"; printf '%s' "${local_db_host:-localhost}")
+        try_local_login "$saved_user" "$saved_password" "$saved_host" && return 0
+    fi
+    #2) common local defaults: wordget's old default, Homebrew/DBngin, MAMP
+    try_local_login wp   wp   localhost      && return 0
+    try_local_login root ''   localhost      && return 0
+    try_local_login root root localhost      && return 0
+    try_local_login root root 127.0.0.1:8889 && return 0
+    #3) ask
+    (: </dev/tty) 2>/dev/null || die "Could not log in to the local MySQL server. Run wordget once in a terminal to enter and save the login."
+    echo ""
+    printf '\033[1;33mCould not log in to your local MySQL server with the usual defaults.\033[0m\n'
+    local user password host error save
+    while :; do
+        ask user "Local MySQL user" "root"
+        printf '\033[1;36m?\033[0m \033[1mLocal MySQL password\033[0m \033[2m(hidden, empty for none)\033[0m: '
+        read -r -s password < /dev/tty || { echo ""; exit 1; }
+        echo ""
+        ask host "Local MySQL host (host, host:port or host:/path/to/socket)" "localhost"
+        try_local_login "$user" "$password" "$host" && break
+        error=$(lmysql -e 'SELECT 1' 2>&1 </dev/null >/dev/null | tail -n1)
+        printf '  \033[1;31m%s\033[0m\n' "${error:-Login failed}"
+    done
+    ask_yn save "Save this login for next time? ($wordget_config)" y
+    if [ -n "$save" ]; then
+        mkdir -p "$(dirname "$wordget_config")" \
+        && (umask 077; printf 'local_db_user=%q\nlocal_db_password=%q\nlocal_db_host=%q\n' \
+                "$local_db_user" "$local_db_password" "$local_db_host" > "$wordget_config") \
+        && chmod 600 "$wordget_config"
+    fi
+}
+
+# ------------------
 # Parameters
 # ------------------
 while getopts "h:u:s:t:d:p:o:" opt
@@ -363,6 +421,7 @@ if [ -n "$database_name" ]; then
     fi
     if [ "$local_env" == "plain" ]; then
         command -v mysql >/dev/null 2>&1 || die "The mysql client is needed locally to import the database."
+        find_local_login
     fi
 fi
 
@@ -379,7 +438,7 @@ if [ -z "$quiet" ]; then
     [ -n "$exclude_uploads" ] && echo "The uploads/ folder will not be downloaded."
     if [ -n "$database_name" ]; then
         if [ "$local_env" == "plain" ]; then
-            echo "The remote database will be downloaded and imported into your local database: $database_name."
+            echo "The remote database will be downloaded and imported into your local database: $database_name (as ${local_db_user}@${local_db_host})."
         else
             echo "The remote database will be downloaded and REPLACE this site's local database."
         fi
@@ -432,18 +491,22 @@ if [ -n "$database_name" ]; then
 
     if [ "$local_env" == "plain" ]; then
         info "Importing into local database $database_name"
-        mysql --user=$local_db_user --password=$local_db_password --host=localhost \
-            -e "CREATE DATABASE IF NOT EXISTS \`${database_name}\`;" \
-            && gunzip -c "$db_dump" | mysql --max-allowed-packet=1G --user=$local_db_user --password=$local_db_password --host=localhost "$database_name" \
+        lmysql -e "CREATE DATABASE IF NOT EXISTS \`${database_name}\`;" \
+            && gunzip -c "$db_dump" | lmysql --max-allowed-packet=1G "$database_name" \
             || die "Database import failed"
         #point wp-config.php at the local database (portable: no sed -i)
         wpconfig="${target_directory}wp-config.php"
         if [ -f "$wpconfig" ]; then
-            set_define(){ sed "s/\(define *( *['\"]$1['\"] *, *\)['\"].*['\"]\( *)\)/\1'$2'\2/"; }
+            set_define(){
+                #escape for a PHP '...' string, then for the sed replacement
+                local v
+                v=$(printf '%s' "$2" | sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g" | sed -e 's/[\\/&]/\\&/g')
+                sed "s/\(define *( *['\"]$1['\"] *, *\)['\"].*['\"]\( *)\)/\1'$v'\2/"
+            }
             set_define DB_NAME "$database_name" < "$wpconfig" \
                 | set_define DB_USER "$local_db_user" \
                 | set_define DB_PASSWORD "$local_db_password" \
-                | set_define DB_HOST "localhost" > "$wpconfig.wordget" \
+                | set_define DB_HOST "$local_db_host" > "$wpconfig.wordget" \
                 && cat "$wpconfig.wordget" > "$wpconfig" && rm -f "$wpconfig.wordget"
         else
             printf '\033[1;33mWARNING:\033[0m no wp-config.php in %s - point your config at database %s yourself\n' "$target_directory" "$database_name"

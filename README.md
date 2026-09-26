@@ -62,7 +62,8 @@ On the first SSH connection WordGet checks the source server and tells you which
 The local side is detected too:
 - LocalWP: when run from LocalWP's "Open Site Shell". Imports into the LocalWP site's database and replaces the URLs.
 - Existing WordPress site: the target already runs WordPress and local wp-cli works there (VVV, Valet, ...). Same as LocalWP.
-- Plain MySQL (MAMP/XAMPP): creates the database given with -d (MySQL user wp/wp) and points wp-config.php at it.
+- Plain MySQL (MAMP/XAMPP/Homebrew): creates the database given with -d and points wp-config.php at it.
+  The local MySQL login is checked before anything is downloaded: a saved login first, then the usual defaults (wp/wp, root with no password, root/root, MAMP's root/root on 127.0.0.1:8889). If none work, WordGet asks for user, password and host (host, host:port or host:/socket) and can save them in ~/.config/wordget/config (readable only by you).
 
 For existing sites, wp-config.php is never overwritten. Force the local side with -o localwp or -o vvv if detection gets it wrong. -o localmode runs without the confirmation prompt and without output.
 
