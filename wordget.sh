@@ -6,12 +6,12 @@
 # Created December 2019
 # Install: curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh | bash
 # ------------------
-#Local MySQL login for plain (MAMP/XAMPP/Homebrew) imports - found or asked for at runtime,
-#and optionally saved here so you are only asked once
+#Local MySQL login for plain (MAMP/XAMPP/Homebrew) imports - read from the local wp-config.php or asked for
 local_db_user=''
 local_db_password=''
 local_db_host='localhost'
-wordget_config="${XDG_CONFIG_HOME:-$HOME/.config}/wordget/config"
+#Saved per-site settings (only with the user's consent): one file per target folder, mode 600
+site_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/wordget"
 rsync_options='-arpz'
 quiet=''
 show_instructions(){
@@ -304,24 +304,35 @@ try_local_login(){
     lmysql -e 'SELECT 1' </dev/null >/dev/null 2>&1
 }
 find_local_login(){
-    #1) saved login
-    if [ -f "$wordget_config" ]; then
-        local saved_user saved_password saved_host
-        saved_user=$(. "$wordget_config"; printf '%s' "$local_db_user")
-        saved_password=$(. "$wordget_config"; printf '%s' "$local_db_password")
-        saved_host=$(. "$wordget_config"; printf '%s' "${local_db_host:-localhost}")
-        try_local_login "$saved_user" "$saved_password" "$saved_host" && return 0
+    login_asked=""
+    #1) saved settings for this site
+    if [ -f "$site_config" ] && [ -n "$(saved_value "$site_config" local_db_user)" ]; then
+        try_local_login "$(saved_value "$site_config" local_db_user)" \
+                        "$(saved_value "$site_config" local_db_password)" \
+                        "$(saved_value "$site_config" local_db_host)" \
+            && { login_source="saved settings"; return 0; }
+        printf '\033[1;33mWARNING:\033[0m the saved local MySQL login no longer works\n'
     fi
-    #2) common local defaults: wordget's old default, Homebrew/DBngin, MAMP
-    try_local_login wp   wp   localhost      && return 0
-    try_local_login root ''   localhost      && return 0
-    try_local_login root root localhost      && return 0
-    try_local_login root root 127.0.0.1:8889 && return 0
+    #2) an existing local wp-config.php - only if the login really works
+    local wpc="${target_directory}wp-config.php" u p h
+    if [ -f "$wpc" ]; then
+        if command -v wp >/dev/null 2>&1; then
+            u=$(wp --path="$target_directory" config get DB_USER 2>/dev/null)
+            p=$(wp --path="$target_directory" config get DB_PASSWORD 2>/dev/null)
+            h=$(wp --path="$target_directory" config get DB_HOST 2>/dev/null)
+        fi
+        if [ -z "$u" ]; then
+            u=$(config_value "$wpc" DB_USER); p=$(config_value "$wpc" DB_PASSWORD); h=$(config_value "$wpc" DB_HOST)
+        fi
+        if [ -n "$u" ] && try_local_login "$u" "$p" "${h:-localhost}"; then
+            login_source="local wp-config.php"; return 0
+        fi
+    fi
     #3) ask
-    (: </dev/tty) 2>/dev/null || die "Could not log in to the local MySQL server. Run wordget once in a terminal to enter and save the login."
+    (: </dev/tty) 2>/dev/null || die "No working local MySQL login. Run wordget in a terminal to enter it (and save it for this site)."
     echo ""
-    printf '\033[1;33mCould not log in to your local MySQL server with the usual defaults.\033[0m\n'
-    local user password host error save
+    printf '\033[1mLocal MySQL login\033[0m - needed to import the database \033[2m(MAMP: root/root, Homebrew/DBngin: root with no password)\033[0m\n'
+    local user password host error
     while :; do
         ask user "Local MySQL user" "root"
         printf '\033[1;36m?\033[0m \033[1mLocal MySQL password\033[0m \033[2m(hidden, empty for none)\033[0m: '
@@ -332,13 +343,58 @@ find_local_login(){
         error=$(lmysql -e 'SELECT 1' 2>&1 </dev/null >/dev/null | tail -n1)
         printf '  \033[1;31m%s\033[0m\n' "${error:-Login failed}"
     done
-    ask_yn save "Save this login for next time? ($wordget_config)" y
-    if [ -n "$save" ]; then
-        mkdir -p "$(dirname "$wordget_config")" \
-        && (umask 077; printf 'local_db_user=%q\nlocal_db_password=%q\nlocal_db_host=%q\n' \
-                "$local_db_user" "$local_db_password" "$local_db_host" > "$wordget_config") \
-        && chmod 600 "$wordget_config"
+    login_source="entered"
+    login_asked=1
+}
+# config_value FILE NAME -> value of define('NAME', '...') in a local wp-config.php
+config_value(){
+    sed -n -e "s/.*define *( *['\"]$2['\"] *, *'\([^']*\)'.*/\1/p" \
+           -e "s/.*define *( *['\"]$2['\"] *, *\"\([^\"]*\)\".*/\1/p" "$1" 2>/dev/null | head -n1
+}
+
+# ------------------
+# Saved per-site settings
+# ------------------
+saved_fields="website_ipaddress website_username port_number source_directory target_directory database_name extra_options local_db_user local_db_password local_db_host"
+# saved_value FILE VAR -> value of VAR in a saved settings file (read in a subshell)
+saved_value(){
+    ( unset $saved_fields; . "$1" >/dev/null 2>&1; printf '%s' "${!2}" )
+}
+# site_config_file DIR -> settings file for that target folder: ~/.config/wordget/<folder-name>
+# (a second folder with the same name gets a checksum suffix)
+site_config_file(){
+    local dir name f
+    dir=$(add_slash "$1")
+    name=$(basename "$dir" | tr -c 'A-Za-z0-9._\n-' '_')
+    f="$site_config_dir/$name"
+    if [ -f "$f" ] && [ "$(saved_value "$f" target_directory)" != "$dir" ]; then
+        f="$f-$(printf '%s' "$dir" | cksum | cut -d' ' -f1)"
     fi
+    printf '%s' "$f"
+}
+# sq VALUE -> VALUE in single quotes, safe to source back (no ~ or $ expansion)
+sq(){ printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+save_site_config(){
+    local extra=""
+    [ -n "$exclude_uploads" ] && extra="exclude-uploads"
+    ( umask 077
+      mkdir -p "$site_config_dir" && chmod 700 "$site_config_dir" || exit 1
+      {
+        echo "# WordGet saved settings for ${target_directory} - written $(date '+%Y-%m-%d %H:%M')"
+        echo "website_ipaddress=$(sq "$website_ipaddress")"
+        echo "website_username=$(sq "$website_username")"
+        echo "port_number=$(sq "$port_number")"
+        echo "source_directory=$(sq "$source_directory")"
+        echo "target_directory=$(sq "$target_directory")"
+        echo "database_name=$(sq "$database_name")"
+        echo "extra_options=$(sq "$extra")"
+        if [ "$local_env" == "plain" ] && [ -n "$database_name" ]; then
+            echo "local_db_user=$(sq "$local_db_user")"
+            echo "local_db_password=$(sq "$local_db_password")"
+            echo "local_db_host=$(sq "$local_db_host")"
+        fi
+      } > "$site_config" && chmod 600 "$site_config"
+    ) && info "Saved to $site_config" || printf '\033[1;33mWARNING:\033[0m could not save %s\n' "$site_config"
 }
 
 # ------------------
@@ -375,8 +431,28 @@ done
 #No parameters: interactive setup (only when a terminal is attached)
 if [ $# -eq 0 ]
 then
-    if (: </dev/tty) 2>/dev/null; then run_wizard; else show_instructions; fi
-    #the wizard may have set exclude-uploads
+    (: </dev/tty) 2>/dev/null || show_instructions
+    site_config=$(site_config_file "$PWD")
+    use_saved=""
+    if [ -f "$site_config" ]; then
+        echo ""
+        printf '\033[1mSaved settings for this folder\033[0m \033[2m(%s)\033[0m\n' "$site_config"
+        printf '  From: %s@%s:%s (port %s)\n' "$(saved_value "$site_config" website_username)" "$(saved_value "$site_config" website_ipaddress)" \
+            "$(saved_value "$site_config" source_directory)" "$(saved_value "$site_config" port_number)"
+        printf '  Into: %s\n' "$(saved_value "$site_config" target_directory)"
+        [ -n "$(saved_value "$site_config" database_name)" ] && printf '  Database: %s\n' "$(saved_value "$site_config" database_name)"
+        [ -n "$(saved_value "$site_config" extra_options)" ] && printf '  Options: %s\n' "$(saved_value "$site_config" extra_options)"
+        echo ""
+        ask_yn use_saved "Use these settings?" y
+    fi
+    if [ -n "$use_saved" ]; then
+        . "$site_config"
+        used_saved_settings=1
+    else
+        run_wizard
+        from_wizard=1
+    fi
+    #the wizard / saved settings may have set exclude-uploads
     [ "$extra_options" == "exclude-uploads" ] && exclude_uploads=1
 fi
 
@@ -392,6 +468,7 @@ fi
 source_directory=$(add_slash "$source_directory")
 target_directory=$(add_slash "$target_directory")
 mkdir -p "$target_directory" || die "Could not create ${target_directory}"
+site_config=$(site_config_file "$target_directory")
 
 # What type of OS are we on?
 host_uname="$(uname -s)"
@@ -425,6 +502,18 @@ if [ -n "$database_name" ]; then
     fi
 fi
 
+#Offer to save what was typed in (wizard answers and/or a MySQL login entered by hand)
+if [ -z "$no_prompt" ] && { [ -n "$from_wizard" ] || [ -n "$login_asked" ]; } && (: </dev/tty) 2>/dev/null; then
+    echo ""
+    if [ "$local_env" == "plain" ] && [ -n "$database_name" ] && [ -n "$local_db_password" ]; then
+        save_note="readable only by you - includes your LOCAL MySQL password in plain text"
+    else
+        save_note="readable only by you"
+    fi
+    ask_yn save_it "Save these settings so next time you don't have to answer again? (${site_config}, ${save_note})" y
+    [ -n "$save_it" ] && save_site_config
+fi
+
 # ------------------
 # Summary + confirmation
 # ------------------
@@ -438,7 +527,7 @@ if [ -z "$quiet" ]; then
     [ -n "$exclude_uploads" ] && echo "The uploads/ folder will not be downloaded."
     if [ -n "$database_name" ]; then
         if [ "$local_env" == "plain" ]; then
-            echo "The remote database will be downloaded and imported into your local database: $database_name (as ${local_db_user}@${local_db_host})."
+            echo "The remote database will be downloaded and imported into your local database: $database_name (as ${local_db_user}@${local_db_host}, login from ${login_source})."
         else
             echo "The remote database will be downloaded and REPLACE this site's local database."
         fi

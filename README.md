@@ -63,7 +63,12 @@ The local side is detected too:
 - LocalWP: when run from LocalWP's "Open Site Shell". Imports into the LocalWP site's database and replaces the URLs.
 - Existing WordPress site: the target already runs WordPress and local wp-cli works there (VVV, Valet, ...). Same as LocalWP.
 - Plain MySQL (MAMP/XAMPP/Homebrew): creates the database given with -d and points wp-config.php at it.
-  The local MySQL login is checked before anything is downloaded: a saved login first, then the usual defaults (wp/wp, root with no password, root/root, MAMP's root/root on 127.0.0.1:8889). If none work, WordGet asks for user, password and host (host, host:port or host:/socket) and can save them in ~/.config/wordget/config (readable only by you).
+  The local MySQL login is checked before anything is downloaded: saved settings for this site first, then the login in an existing local wp-config.php (only if it really works). Otherwise WordGet asks for user, password and host (host, host:port or host:/socket).
+
+SAVED SETTINGS:
+
+After the wizard, or when you typed in a MySQL login, WordGet asks whether to save the settings for this project folder in ~/.config/wordget/<folder-name> (file mode 600, folder 700 - readable only by you). Next time you run `wordget` in that folder it shows them and asks "Use these settings?", so you skip the questions.
+The file contains the server/user/path (no server secrets - SSH uses your key) and, for plain MySQL imports, your LOCAL MySQL password in plain text, like ~/.my.cnf. Don't use it for production database passwords. Delete the file to forget a site.
 
 For existing sites, wp-config.php is never overwritten. Force the local side with -o localwp or -o vvv if detection gets it wrong. -o localmode runs without the confirmation prompt and without output.
 
