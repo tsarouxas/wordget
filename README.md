@@ -1,10 +1,25 @@
-WordGet - Download a Wordpress Website into your local development
+<h1 align="center">WordGet</h1>
 
-Downloads all Wordpress website files and imports remote database for local development in MAMP/XAMPP or LOCALWP by Flywheel                   
-Copyright (C) 202[0-6] Hellenic Technologies
-https://hellenictechnologies.com/     
-tsarouxas@hellenictechnologies.com      
-version 1.2.4
+<p align="center">
+  <strong>Pull a live WordPress site &mdash; files and database &mdash; into a local staging replica with one command.</strong>
+</p>
+
+<p align="center">
+  <img alt="Linux | macOS" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS-555">
+  <img alt="Bash 3.2+" src="https://img.shields.io/badge/bash-3.2%2B-4EAA25?logo=gnubash&logoColor=white">
+  <img alt="Pull-only" src="https://img.shields.io/badge/source-read--only-0a7">
+</p>
+
+For LocalWP, MAMP / XAMPP, Valet, VVV or a plain server. WordGet detects wp-cli on the source and your local setup, streams the database over SSH, fixes the URLs and `wp-config.php` for the local copy, and never touches the source site.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh | bash
+cd ~/Sites/my-site && wordget
+```
+
+<sub>&copy; 202[0-6] <a href="https://hellenictechnologies.com/">Hellenic Technologies</a> &middot; <a href="mailto:tsarouxas@hellenictechnologies.com">tsarouxas@hellenictechnologies.com</a></sub>
+
+---
 
 HOW IT WORKS - PULL ONLY:
 
@@ -102,6 +117,8 @@ REQUIREMENTS:
 
 
 CHANGELOG:
+- 2026-09-26 v1.8.0 local MySQL login (from saved settings, the local wp-config.php, or asked); saved per-site settings in ~/.config/wordget; always asks for the full local URL; source wp-config.php merged into the local one (local DB login, WP_HOME/WP_SITEURL, WP_CACHE_KEY_SALT) with a backup; URL search-replace in the local database; wp cache flush
+- 2026-09-26 v1.7.0 wp-cli / sftp mode and local environment detected automatically; database streamed over SSH (nothing written on the source); charset from DB_CHARSET, max-allowed-packet 1G, single-transaction; interactive setup when run without parameters; curl | bash installer
 - 2020-07-26 direct integration with LocalWP - using option localwp
 - 2020-06-29 fixed mysqldump downloading of remote database
 

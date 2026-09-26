@@ -15,7 +15,7 @@ site_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/wordget"
 rsync_options='-arpz'
 quiet=''
 show_instructions(){
-    echo "WordGet v1.7.0"
+    echo "WordGet v1.8.0"
     echo "--------------------------------"
     echo "(C) 2020-2021 Hellenic Technologies"
     echo "https://hellenictechnologies.com"
