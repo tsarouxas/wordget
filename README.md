@@ -1,7 +1,7 @@
 WordGet - Download a Wordpress Website into your local development
 
 Downloads all Wordpress website files and imports remote database for local development in MAMP/XAMPP or LOCALWP by Flywheel                   
-Copyright (C) 2020 Hellenic Technologies
+Copyright (C) 202[0-6] Hellenic Technologies
 https://hellenictechnologies.com/     
 tsarouxas@hellenictechnologies.com      
 version 1.2.4
