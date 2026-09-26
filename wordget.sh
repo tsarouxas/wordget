@@ -218,6 +218,7 @@ cd "$1" 2>/dev/null || { echo "NODIR"; exit 0; }
 { [ -f wp-config.php ] || [ -f ../wp-config.php ]; } && echo "WPCONFIG"
 if command -v wp >/dev/null 2>&1 && v=$(wp core version --skip-plugins --skip-themes 2>/dev/null); then
     echo "WPCLI $v"
+    echo "HOME $(wp option get home --skip-plugins --skip-themes 2>/dev/null)"
 fi
 command -v mysqldump >/dev/null 2>&1 && echo "MYSQLDUMP"
 echo "OK"
@@ -232,6 +233,7 @@ EOF
     remote_has_mysqldump=""
     grep -q '^MYSQLDUMP$' <<< "$out" && remote_has_mysqldump=1
     remote_wp_version=$(sed -n 's/^WPCLI //p' <<< "$out")
+    remote_site_url=$(sed -n 's/^HOME //p' <<< "$out")
     if [ -n "$remote_wp_version" ]; then
         remote_mode="wp-cli"
     else
@@ -355,7 +357,7 @@ config_value(){
 # ------------------
 # Saved per-site settings
 # ------------------
-saved_fields="website_ipaddress website_username port_number source_directory target_directory database_name extra_options local_db_user local_db_password local_db_host"
+saved_fields="website_ipaddress website_username port_number source_directory target_directory database_name extra_options local_db_user local_db_password local_db_host local_url search_replace"
 # saved_value FILE VAR -> value of VAR in a saved settings file (read in a subshell)
 saved_value(){
     ( unset $saved_fields; . "$1" >/dev/null 2>&1; printf '%s' "${!2}" )
@@ -388,6 +390,8 @@ save_site_config(){
         echo "target_directory=$(sq "$target_directory")"
         echo "database_name=$(sq "$database_name")"
         echo "extra_options=$(sq "$extra")"
+        echo "local_url=$(sq "$local_url")"
+        [ -n "$database_name" ] && echo "search_replace=$(sq "$search_replace")"
         if [ "$local_env" == "plain" ] && [ -n "$database_name" ]; then
             echo "local_db_user=$(sq "$local_db_user")"
             echo "local_db_password=$(sq "$local_db_password")"
@@ -395,6 +399,176 @@ save_site_config(){
         fi
       } > "$site_config" && chmod 600 "$site_config"
     ) && info "Saved to $site_config" || printf '\033[1;33mWARNING:\033[0m could not save %s\n' "$site_config"
+}
+
+# ------------------
+# wp-config.php and URL helpers
+# ------------------
+# set_define NAME VALUE < wp-config.php -> wp-config.php with define('NAME', 'VALUE')
+set_define(){
+    #escape for a PHP '...' string, then for the sed replacement
+    local v
+    v=$(printf '%s' "$2" | sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g" | sed -e 's/[\\/&]/\\&/g')
+    sed "s/\(define *( *['\"]$1['\"] *, *\)['\"].*['\"]\( *)\)/\1'$v'\2/"
+}
+# url_origin URL -> scheme://host[:port]
+url_origin(){ printf '%s' "$1" | sed -n 's#^\(https\{0,1\}://[^/]*\).*#\1#p'; }
+# ask_local_url: the local site URL (always with http:// or https://) and whether to search-replace the DB
+ask_local_url(){
+    local saved_sr="" saved_url="" interactive=""
+    if [ -f "$site_config" ]; then
+        saved_sr=$(saved_value "$site_config" search_replace)
+        saved_url=$(saved_value "$site_config" local_url)
+    fi
+    [ -z "$no_prompt" ] && (: </dev/tty) 2>/dev/null && interactive=1
+    if [ -n "$saved_url" ]; then
+        local_url="$saved_url"
+    elif [ -n "$interactive" ]; then
+        local guess="$local_domain_url"
+        [ -n "$guess" ] || guess="http://$(basename "${target_directory%/}" | tr 'A-Z' 'a-z').test"
+        echo ""
+        while :; do
+            ask local_url "Local site URL - full, with http:// or https://" "$guess"
+            local_url="${local_url%/}"
+            case "$local_url" in
+                http://?*|https://?*) break ;;
+                *) printf '  \033[1;31mStart with http:// or https:// (e.g. %s)\033[0m\n' "$guess" ;;
+            esac
+        done
+        url_asked=1
+    else
+        #unattended: only what we know for sure
+        local_url="${local_domain_url%/}"
+    fi
+    search_replace=no
+    if [ -n "$database_name" ] && [ -n "$local_url" ]; then
+        if [ -n "$saved_sr" ]; then
+            search_replace="$saved_sr"
+        elif [ -n "$interactive" ]; then
+            local answer
+            ask_yn answer "After the import, search-replace the source URL with $local_url in the local database?" y
+            if [ -n "$answer" ]; then search_replace=yes; fi
+            url_asked=1
+        else
+            search_replace=yes
+        fi
+    fi
+}
+# local_db_creds: DB_NAME/USER/PASSWORD/HOST the local wp-config.php must keep
+local_db_creds(){
+    cfg_db_name=""; cfg_db_user=""; cfg_db_password=""; cfg_db_host=""
+    local wpc="${target_directory}wp-config.php"
+    if [ "$local_env" == "plain" ] && [ -n "$database_name" ]; then
+        cfg_db_name="$database_name"; cfg_db_user="$local_db_user"; cfg_db_password="$local_db_password"; cfg_db_host="$local_db_host"
+    elif [ -f "$wpc" ]; then
+        #the existing local install's own login
+        if command -v wp >/dev/null 2>&1; then
+            cfg_db_name=$(wp --path="$target_directory" config get DB_NAME 2>/dev/null)
+            cfg_db_user=$(wp --path="$target_directory" config get DB_USER 2>/dev/null)
+            cfg_db_password=$(wp --path="$target_directory" config get DB_PASSWORD 2>/dev/null)
+            cfg_db_host=$(wp --path="$target_directory" config get DB_HOST 2>/dev/null)
+        fi
+        if [ -z "$cfg_db_user" ]; then
+            cfg_db_name=$(config_value "$wpc" DB_NAME); cfg_db_user=$(config_value "$wpc" DB_USER)
+            cfg_db_password=$(config_value "$wpc" DB_PASSWORD); cfg_db_host=$(config_value "$wpc" DB_HOST)
+        fi
+    fi
+}
+# fetch_source_config FILE -> the source site's wp-config.php
+fetch_source_config(){
+    remote > "$1" <<'EOF'
+cd "$1" || exit 1
+if [ -f wp-config.php ]; then cat wp-config.php; elif [ -f ../wp-config.php ]; then cat ../wp-config.php; else exit 3; fi
+EOF
+}
+# url_host URL -> host[:port]
+url_host(){ local o; o=$(url_origin "$1"); printf '%s' "${o#*://}"; }
+# merge_wp_config: source wp-config.php, with the local DB login, local URLs and cache salt
+merge_wp_config(){
+    local src wpc="${target_directory}wp-config.php" tmp="${target_directory}wp-config.php.wordget"
+    src=$(mktemp "${TMPDIR:-/tmp}/wordget-cfg.XXXXXX")
+    if ! fetch_source_config "$src" || [ ! -s "$src" ]; then
+        rm -f "$src"
+        printf '\033[1;33mWARNING:\033[0m no wp-config.php on the source - local wp-config.php left as it is\n'
+        return 0
+    fi
+    src_home=$(config_value "$src" WP_HOME)
+    src_siteurl=$(config_value "$src" WP_SITEURL)
+    local salt new_salt local_host h
+    salt=$(config_value "$src" WP_CACHE_KEY_SALT)
+    local_host=$(url_host "$local_url")
+    if [ -n "$salt" ] && [ -n "$local_host" ]; then
+        new_salt="$salt"
+        for h in $(url_host "$src_home") $(url_host "$src_siteurl") $(url_host "$remote_site_url"); do
+            new_salt="${new_salt//$h/$local_host}"
+        done
+        #no source host inside it: just use the local host
+        [ "$new_salt" == "$salt" ] && new_salt="$local_host"
+    fi
+    [ -z "$cfg_db_user" ] && printf '\033[1;33mWARNING:\033[0m no local database login known - wp-config.php keeps the source DB_* settings\n'
+    #each step only touches a define that exists in the source file
+    step(){ if [ -n "$2" ]; then set_define "$1" "$2"; else cat; fi; }
+    step DB_NAME "$cfg_db_name" < "$src" \
+        | step DB_USER "$cfg_db_user" \
+        | { if [ -n "$cfg_db_user" ]; then set_define DB_PASSWORD "$cfg_db_password"; else cat; fi; } \
+        | step DB_HOST "$cfg_db_host" \
+        | step WP_HOME "${src_home:+$local_url${src_home#$(url_origin "$src_home")}}" \
+        | step WP_SITEURL "${src_siteurl:+$local_url${src_siteurl#$(url_origin "$src_siteurl")}}" \
+        | step WP_CACHE_KEY_SALT "$new_salt" > "$tmp" || { rm -f "$src" "$tmp"; die "Could not write wp-config.php"; }
+    rm -f "$src"
+    #keep the previous local config once, if it was different
+    if [ -f "$wpc" ] && ! cmp -s "$wpc" "$tmp"; then
+        cp -p "$wpc" "${wpc}.wordget-backup"
+        info "Previous local wp-config.php saved as wp-config.php.wordget-backup"
+    fi
+    if [ -f "$wpc" ]; then cat "$tmp" > "$wpc"; rm -f "$tmp"; else mv "$tmp" "$wpc"; fi
+    info "wp-config.php from the source${cfg_db_user:+, with the local database login}${local_url:+, URLs -> $local_url}${new_salt:+, WP_CACHE_KEY_SALT -> $new_salt}"
+}
+# replace_urls: after the import - source URL(s) -> $local_url in the LOCAL database only
+replace_urls(){
+    local wpconfig="${target_directory}wp-config.php" prefix db_home db_siteurl
+    if [ "$local_env" == "plain" ]; then
+        prefix=$(sed -n "s/^[[:space:]]*\$table_prefix[[:space:]]*=[[:space:]]*['\"]\([^'\"]*\)['\"].*/\1/p" "$wpconfig" 2>/dev/null | head -n1)
+        prefix=${prefix:-wp_}
+        db_home=$(lmysql -N -e "SELECT option_value FROM \`${prefix}options\` WHERE option_name='home'" "$database_name" 2>/dev/null </dev/null)
+        db_siteurl=$(lmysql -N -e "SELECT option_value FROM \`${prefix}options\` WHERE option_name='siteurl'" "$database_name" 2>/dev/null </dev/null)
+    else
+        prefix=$(lwp db prefix 2>/dev/null)
+        db_home=$(lwp db query "SELECT option_value FROM ${prefix}options WHERE option_name='home'" --skip-column-names "${wp_db_conn[@]}" 2>/dev/null | tail -n1)
+        db_siteurl=$(lwp db query "SELECT option_value FROM ${prefix}options WHERE option_name='siteurl'" --skip-column-names "${wp_db_conn[@]}" 2>/dev/null | tail -n1)
+    fi
+    #distinct source origins (DB options and the source wp-config constants can differ, e.g. a dev copy of a live DB)
+    local origins="" v o
+    for v in "$db_home" "$db_siteurl" "$src_home" "$src_siteurl"; do
+        o=$(url_origin "$v")
+        [ -n "$o" ] && [ "$o" != "$local_url" ] || continue
+        case " $origins " in *" $o "*) ;; *) origins="$origins $o" ;; esac
+    done
+    if [ -z "$origins" ]; then
+        info "Database URLs already match $local_url - nothing to replace"
+        return 0
+    fi
+    if ! command -v wp >/dev/null 2>&1; then
+        printf '\033[1;33mWARNING:\033[0m local wp-cli not found - search-replace skipped (it must be serialization-safe). Run later:\n'
+        for o in $origins; do printf '  wp --path=%s search-replace %s %s --all-tables-with-prefix\n' "$target_directory" "$o" "$local_url"; done
+        return 0
+    fi
+    local host from f to count esc_to pair
+    esc_to=$(printf '%s' "$local_url" | sed 's#/#\\/#g')
+    for o in $origins; do
+        host=${o#*://}
+        for from in "https://$host" "http://$host"; do
+            [ "$from" == "$local_url" ] && continue
+            #never replace a prefix of the target itself (https://site.gr -> http://site.gr.test would repeat)
+            case "$local_url" in "$from"*) continue ;; esac
+            for pair in plain escaped; do
+                if [ "$pair" == "plain" ]; then to="$local_url"; f="$from"
+                else f=$(printf '%s' "$from" | sed 's#/#\\/#g'); to="$esc_to"; fi
+                count=$(lwp search-replace "$f" "$to" --all-tables-with-prefix --skip-plugins --skip-themes --format=count 2>/dev/null)
+                case "$count" in ''|0) ;; *) info "Replaced $count x $f -> $to" ;; esac
+            done
+        done
+    done
 }
 
 # ------------------
@@ -502,8 +676,10 @@ if [ -n "$database_name" ]; then
     fi
 fi
 
-#Offer to save what was typed in (wizard answers and/or a MySQL login entered by hand)
-if [ -z "$no_prompt" ] && { [ -n "$from_wizard" ] || [ -n "$login_asked" ]; } && (: </dev/tty) 2>/dev/null; then
+ask_local_url
+
+#Offer to save what was typed in (wizard answers, a MySQL login or URL answers entered by hand)
+if [ -z "$no_prompt" ] && { [ -n "$from_wizard" ] || [ -n "$login_asked" ] || [ -n "$url_asked" ]; } && (: </dev/tty) 2>/dev/null; then
     echo ""
     if [ "$local_env" == "plain" ] && [ -n "$database_name" ] && [ -n "$local_db_password" ]; then
         save_note="readable only by you - includes your LOCAL MySQL password in plain text"
@@ -525,11 +701,17 @@ if [ -z "$quiet" ]; then
     echo "From: ${website_username}@${website_ipaddress}:${source_directory} (port ${port_number})"
     echo "Into: ${target_directory}"
     [ -n "$exclude_uploads" ] && echo "The uploads/ folder will not be downloaded."
+    echo "wp-config.php: taken from the source (the local one is backed up), with the local database login${local_url:+ and URLs set to $local_url}."
     if [ -n "$database_name" ]; then
         if [ "$local_env" == "plain" ]; then
             echo "The remote database will be downloaded and imported into your local database: $database_name (as ${local_db_user}@${local_db_host}, login from ${login_source})."
         else
             echo "The remote database will be downloaded and REPLACE this site's local database."
+        fi
+        if [ "$search_replace" == "yes" ]; then
+            echo "Source site URLs will be replaced with ${local_url} in the local database."
+        else
+            echo "No URL search-replace in the database."
         fi
     else
         echo "The remote database will not be downloaded."
@@ -545,17 +727,17 @@ if [ -z "$no_prompt" ]; then
 fi
 
 # ------------------
-# Files
+# Files - wp-config.php is never overwritten by rsync; it is merged below
 # ------------------
+local_db_creds
 info "Downloading website files..."
-rsync_excludes=(--exclude 'wp-content/cache/*')
+rsync_excludes=(--exclude 'wp-content/cache/*' --exclude 'wp-config.php' --exclude 'wp-config.php.wordget*')
 [ -n "$exclude_uploads" ] && rsync_excludes+=(--exclude 'wp-content/uploads/*')
-#an existing local site keeps its own wp-config.php; plain imports take the remote one and repoint it
-[ "$local_env" != "plain" ] && rsync_excludes+=(--exclude 'wp-config.php')
 rsync -e "ssh -i ~/.ssh/id_rsa -q -p $port_number -o PasswordAuthentication=no -o StrictHostKeyChecking=no -o GSSAPIAuthentication=no" \
     $rsync_options --progress "${rsync_excludes[@]}" \
     "$website_username@$website_ipaddress:$source_directory" "$target_directory" \
     || die "File download failed"
+merge_wp_config
 
 # ------------------
 # Database
@@ -580,54 +762,33 @@ if [ -n "$database_name" ]; then
 
     if [ "$local_env" == "plain" ]; then
         info "Importing into local database $database_name"
-        lmysql -e "CREATE DATABASE IF NOT EXISTS \`${database_name}\`;" \
+        lmysql -e "CREATE DATABASE IF NOT EXISTS \`${database_name}\`;" </dev/null \
             && gunzip -c "$db_dump" | lmysql --max-allowed-packet=1G "$database_name" \
             || die "Database import failed"
-        #point wp-config.php at the local database (portable: no sed -i)
-        wpconfig="${target_directory}wp-config.php"
-        if [ -f "$wpconfig" ]; then
-            set_define(){
-                #escape for a PHP '...' string, then for the sed replacement
-                local v
-                v=$(printf '%s' "$2" | sed -e 's/\\/\\\\/g' -e "s/'/\\\\'/g" | sed -e 's/[\\/&]/\\&/g')
-                sed "s/\(define *( *['\"]$1['\"] *, *\)['\"].*['\"]\( *)\)/\1'$v'\2/"
-            }
-            set_define DB_NAME "$database_name" < "$wpconfig" \
-                | set_define DB_USER "$local_db_user" \
-                | set_define DB_PASSWORD "$local_db_password" \
-                | set_define DB_HOST "$local_db_host" > "$wpconfig.wordget" \
-                && cat "$wpconfig.wordget" > "$wpconfig" && rm -f "$wpconfig.wordget"
-        else
-            printf '\033[1;33mWARNING:\033[0m no wp-config.php in %s - point your config at database %s yourself\n' "$target_directory" "$database_name"
-        fi
     else
         info "Importing into the local site's database"
         gunzip -c "$db_dump" | lwp db import - --quiet --force --skip-optimization --max-allowed-packet=1G "${wp_db_conn[@]}" \
             || die "Database import failed"
-        #the imported options table still holds the source URL
-        remote_domain_url=$(lwp db query "SELECT option_value FROM $(lwp db prefix)options WHERE option_name='siteurl'" --skip-column-names "${wp_db_conn[@]}" 2>/dev/null | tail -n1)
-        if [ -n "$remote_domain_url" ] && [ -n "$local_domain_url" ] && [ "$remote_domain_url" != "$local_domain_url" ]; then
-            info "Replacing $remote_domain_url with $local_domain_url"
-            lwp search-replace "$remote_domain_url" "$local_domain_url" --quiet
-        else
-            printf '\033[1;33mWARNING:\033[0m could not determine the URLs - skipped search-replace (source: %s, local: %s)\n' "${remote_domain_url:-?}" "${local_domain_url:-?}"
-        fi
     fi
+    [ "$search_replace" == "yes" ] && replace_urls
 fi
 
 # ------------------
-# Finalize (sites with local wp-cli)
+# Finalize
 # ------------------
-if [ "$local_env" != "plain" ]; then
-    #LocalWP on Linux: make Chrome trust the local certificate if mkcert is installed
-    if [ "$local_env" == "localwp" ] && [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ]; then
-        local_domain_url_stripped=$(echo ${local_domain_url//https\:\/\//})
-        local_domain_url_stripped=$(echo ${local_domain_url_stripped//http\:\/\//})
-        mkcert $local_domain_url_stripped  2> /dev/null
-        mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
-        mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
+#LocalWP on Linux: make Chrome trust the local certificate if mkcert is installed
+if [ "$local_env" == "localwp" ] && [ -x "$(command -v mkcert)" ] && [ "$host_os" == 'Linux' ]; then
+    local_domain_url_stripped=$(echo ${local_domain_url//https\:\/\//})
+    local_domain_url_stripped=$(echo ${local_domain_url_stripped//http\:\/\//})
+    mkcert $local_domain_url_stripped  2> /dev/null
+    mv $local_domain_url_stripped.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.crt
+    mv $local_domain_url_stripped-key.pem ~/.config/Local/run/router/nginx/certs/$local_domain_url_stripped.key
+fi
+if command -v wp >/dev/null 2>&1 && [ -n "$database_name" ]; then
+    info "Flushing caches"
+    lwp cache flush --skip-plugins --skip-themes >/dev/null 2>&1 || printf '\033[1;33mWARNING:\033[0m wp cache flush failed\n'
+    if [ "$local_env" != "plain" ]; then
+        lwp rewrite flush >/dev/null 2>&1; lwp transient delete --all >/dev/null 2>&1; lwp db optimize "${wp_db_conn[@]}" >/dev/null 2>&1
     fi
-    #tidy up the local site after download
-    lwp cache flush && lwp rewrite flush && lwp transient delete --all && lwp db optimize "${wp_db_conn[@]}"
 fi
 info "Done."

@@ -65,6 +65,18 @@ The local side is detected too:
 - Plain MySQL (MAMP/XAMPP/Homebrew): creates the database given with -d and points wp-config.php at it.
   The local MySQL login is checked before anything is downloaded: saved settings for this site first, then the login in an existing local wp-config.php (only if it really works). Otherwise WordGet asks for user, password and host (host, host:port or host:/socket).
 
+LOCAL URL, WP-CONFIG.PHP AND SEARCH-REPLACE:
+
+WordGet builds a local staging replica of the source site:
+- It always asks for the full local URL, with http:// or https:// (e.g. http://spentzos-gr.test).
+- rsync never overwrites your local wp-config.php. Instead the source wp-config.php is fetched and merged: everything comes from the source (constants, $table_prefix, ...) except
+  - DB_NAME / DB_USER / DB_PASSWORD / DB_HOST: the local login (an existing local install keeps its own; plain MySQL uses the login you entered and the -d database)
+  - WP_HOME / WP_SITEURL: the local URL (any path such as /wp is kept)
+  - WP_CACHE_KEY_SALT: the source host inside it is replaced with the local host
+  The previous local wp-config.php is kept as wp-config.php.wordget-backup.
+- With -d it asks whether to search-replace the source URL in the LOCAL database (the source is never touched). It collects every source URL - the home/siteurl options in the imported database and WP_HOME/WP_SITEURL in the source wp-config.php - and runs `wp search-replace --all-tables-with-prefix` for https:// and http:// of each, plus the JSON-escaped https:\/\/ form used by Elementor/blocks, always to the exact local URL (so https:// on the source becomes your local scheme). Then `wp cache flush`.
+- Local wp-cli is needed for the search-replace (it is serialization-safe); without it WordGet prints the commands to run later.
+
 SAVED SETTINGS:
 
 After the wizard, or when you typed in a MySQL login, WordGet asks whether to save the settings for this project folder in ~/.config/wordget/<folder-name> (file mode 600, folder 700 - readable only by you). Next time you run `wordget` in that folder it shows them and asks "Use these settings?", so you skip the questions.
