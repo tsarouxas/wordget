@@ -6,12 +6,23 @@ https://hellenictechnologies.com/
 tsarouxas@hellenictechnologies.com      
 version 1.2.4
 
-INSTALLATION:
-Make wordget executable and add to your PATH 
+INSTALLATION (Linux & macOS):
 
-chmod +x /path_to_wordget/wordget.sh
-ln -s /path_to_wordget/wordget.sh /usr/local/bin/wordget
-You can now run it from anywhere in a terminal just by typing the command: wordget
+```bash
+curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh | bash
+```
+
+Installs wordget into /usr/local/bin (asks for sudo if needed), or ~/.local/bin if sudo isn't available.
+Run the same command again to upgrade.
+
+Options (environment variables):
+- `WORDGET_INSTALL_DIR=~/bin` install somewhere else
+- `WORDGET_REF=localwp` install from another branch or tag
+
+e.g.
+```bash
+curl -fsSL https://raw.githubusercontent.com/tsarouxas/wordget/master/install.sh | WORDGET_INSTALL_DIR=~/bin bash
+```
 
 USAGE: 
 
