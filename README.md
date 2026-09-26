@@ -6,6 +6,19 @@ https://hellenictechnologies.com/
 tsarouxas@hellenictechnologies.com      
 version 1.2.4
 
+HOW IT WORKS - PULL ONLY:
+
+WordGet is a pull-only tool. It never deploys, pushes or syncs anything back to the source site.
+
+1. Set up a new, empty WordPress project where you want the copy: on your machine (LocalWP, VVV, MAMP/XAMPP) or on another server.
+2. Run wordget from that target. It connects to the source over SSH and fetches the files (rsync) and, if you ask for it with -d, the database.
+3. Everything WordGet changes is on the target side: the downloaded files, the local database import, URL search-replace, and the local wp-config.php.
+
+The source site is treated as read-only: no files are uploaded to it, and its files and database are never modified.
+Only exception: in localwp / vvv / localmode with -d, the database is exported to a temporary local.sql / local.sql.gz in the source directory, which WordGet deletes again once it's downloaded.
+
+Direction is always SOURCE (-h/-u/-s) --> TARGET (-t / current folder). To go the other way, use a deployment tool, not WordGet.
+
 INSTALLATION (Linux & macOS):
 
 ```bash
